@@ -8,6 +8,10 @@ from State_Handle import TaskManager
 from infer_server_client import model_configs, serve_model_process
 from shared_memory_manager import SharedMemoryManager
 
+SERIAL_PHYSICAL_PATH = "2.2:1.0"
+CAMERA_DEVICE = "/dev/video0"
+LANE_MODEL_PATH = "/home/jetson/workspace_plus/vehicle_wbt_21th_lane/src/cnn_auto.nb"
+
 
 def start_framework():
     print("=" * 60)
@@ -22,12 +26,12 @@ def start_framework():
     mgr = ProcessManager()
 
     print("[Main] Starting UART service process...")
-    mgr.add_process(target=serial_server_process, args=("1-2.1:1.0",))
+    mgr.add_process(target=serial_server_process, args=(SERIAL_PHYSICAL_PATH,))
 
     print("[Main] Starting lane camera process...")
     mgr.add_process(
         target=vidpub_course,
-        args=("shm_0", "shm_lane", "model.nb", "1-2.2:1.0"),
+        args=("shm_0", "shm_lane", LANE_MODEL_PATH, CAMERA_DEVICE),
     )
 
     print("[Main] Starting task and OCR model services...")
