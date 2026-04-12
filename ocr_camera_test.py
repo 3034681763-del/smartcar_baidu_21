@@ -137,8 +137,32 @@ def load_paddle_jetson(optional_path=""):
         ) from exc
 
 
+def patch_namespace_defaults():
+    defaults = {
+        "enable_mkldnn": False,
+        "enable_mkldnn_bfloat16": False,
+        "cpu_threads": 1,
+        "use_gpu": True,
+        "gpu_id": 0,
+        "gpu_mem": 1024,
+        "ir_optim": True,
+        "use_tensorrt": False,
+        "precision": "fp32",
+        "min_subgraph_size": 3,
+        "benchmark": False,
+        "use_fp16": False,
+        "device": "GPU",
+        "run_mode": "paddle",
+    }
+
+    for key, value in defaults.items():
+        if not hasattr(argparse.Namespace, key):
+            setattr(argparse.Namespace, key, value)
+
+
 def run_ocr_on_frame(frame, task_model, ocr_model, target_label, paddle_jetson_path=""):
     OCRReco, YoloeInfer = load_paddle_jetson(paddle_jetson_path)
+    patch_namespace_defaults()
 
     detector = YoloeInfer(task_model)
     ocr = OCRReco(ocr_model)
