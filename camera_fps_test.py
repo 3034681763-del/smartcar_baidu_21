@@ -6,7 +6,7 @@ import cv2
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Test camera capture FPS on Jetson or Linux devices."
+        description="Realtime camera preview with FPS overlay for Jetson/Linux."
     )
     parser.add_argument(
         "--device",
@@ -32,10 +32,15 @@ def build_parser():
         help="Requested camera FPS",
     )
     parser.add_argument(
+        "--codec",
+        default="MJPG",
+        help="Requested FOURCC codec, e.g. MJPG or YUYV",
+    )
+    parser.add_argument(
         "--duration",
         type=int,
-        default=10,
-        help="How long to measure FPS in seconds",
+        default=0,
+        help="How long to run in seconds. Use 0 for no limit",
     )
     parser.add_argument(
         "--warmup",
@@ -44,9 +49,9 @@ def build_parser():
         help="Warmup time before measuring in seconds",
     )
     parser.add_argument(
-        "--no-display",
-        action="store_true",
-        help="Disable preview window",
+        "--window-name",
+        default="camera_fps_test",
+        help="Preview window name",
     )
     return parser
 
@@ -57,44 +62,58 @@ def parse_device(device_arg):
     return device_arg
 
 
-def draw_fps_overlay(frame, fps_value):
-    overlay_text = f"FPS: {fps_value:.2f}"
+def draw_overlay(frame, instant_fps, average_fps):
+    lines = [
+        f"Instant FPS: {instant_fps:5.2f}",
+        f"Average FPS: {average_fps:5.2f}",
+    ]
     font = cv2.FONT_HERSHEY_SIMPLEX
-    scale = 0.8
+    scale = 0.7
     thickness = 2
-    text_size, baseline = cv2.getTextSize(overlay_text, font, scale, thickness)
+    margin = 12
+    line_gap = 10
 
-    text_x = max(frame.shape[1] - text_size[0] - 16, 10)
-    text_y = max(text_size[1] + 16, 20)
+    sizes = [cv2.getTextSize(text, font, scale, thickness) for text in lines]
+    max_width = max(size[0][0] for size in sizes)
+    total_height = sum(size[0][1] + size[1] for size in sizes) + line_gap * (len(lines) - 1)
 
-    cv2.rectangle(
-        frame,
-        (text_x - 10, text_y - text_size[1] - 10),
-        (text_x + text_size[0] + 10, text_y + baseline + 10),
-        (0, 0, 0),
-        -1,
-    )
-    cv2.putText(
-        frame,
-        overlay_text,
-        (text_x, text_y),
-        font,
-        scale,
-        (0, 255, 0),
-        thickness,
-        cv2.LINE_AA,
-    )
+    x2 = frame.shape[1] - margin
+    x1 = max(x2 - max_width - 24, 0)
+    y1 = margin
+    y2 = min(y1 + total_height + 24, frame.shape[0])
+
+    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 0), -1)
+
+    cursor_y = y1 + 22
+    for index, text in enumerate(lines):
+        size, baseline = sizes[index]
+        text_x = x2 - size[0] - 12
+        text_y = cursor_y + size[1]
+        cv2.putText(
+            frame,
+            text,
+            (text_x, text_y),
+            font,
+            scale,
+            (0, 255, 0),
+            thickness,
+            cv2.LINE_AA,
+        )
+        cursor_y = text_y + baseline + line_gap
 
 
 def main():
     args = build_parser().parse_args()
     device = parse_device(args.device)
-    show_display = not args.no_display
 
     cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
     if not cap.isOpened():
         raise RuntimeError(f"Failed to open camera: {args.device}")
 
+    if len(args.codec) != 4:
+        raise ValueError("FOURCC codec must be exactly 4 characters, e.g. MJPG")
+
+    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*args.codec))
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
     cap.set(cv2.CAP_PROP_FPS, args.fps)
@@ -103,20 +122,21 @@ def main():
     actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     actual_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     actual_fps = cap.get(cv2.CAP_PROP_FPS)
+    actual_fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
+    actual_codec = "".join(chr((actual_fourcc >> 8 * i) & 0xFF) for i in range(4))
 
     print("=" * 60)
     print("Camera FPS Test")
-    print(f"Device: {args.device}")
-    print(f"Requested: {args.width}x{args.height} @ {args.fps} FPS")
-    print(f"Actual:    {actual_width}x{actual_height} @ {actual_fps:.2f} FPS")
+    print(f"Device:    {args.device}")
+    print(f"Requested: {args.width}x{args.height} @ {args.fps} FPS, codec={args.codec}")
+    print(f"Actual:    {actual_width}x{actual_height} @ {actual_fps:.2f} FPS, codec={actual_codec}")
     print(f"Warmup:    {args.warmup:.1f}s")
-    print(f"Measure:   {args.duration}s")
-    print(f"Display:   {'on' if show_display else 'off'}")
-    print("Press q to quit preview early")
+    print(f"Duration:  {'unlimited' if args.duration == 0 else str(args.duration) + 's'}")
+    print("Preview:   on")
+    print("Quit:      press q in the preview window")
     print("=" * 60)
 
-    if show_display:
-        cv2.namedWindow("camera_fps_test", cv2.WINDOW_NORMAL)
+    cv2.namedWindow(args.window_name, cv2.WINDOW_NORMAL)
 
     warmup_end = time.time() + args.warmup
     while time.time() < warmup_end:
@@ -126,9 +146,10 @@ def main():
 
     frame_count = 0
     start_time = time.time()
-    last_report_time = start_time
-    last_report_count = 0
+    last_fps_update_time = start_time
+    last_fps_update_count = 0
     instant_fps = 0.0
+    average_fps = 0.0
 
     try:
         while True:
@@ -140,32 +161,34 @@ def main():
             frame_count += 1
             now = time.time()
             elapsed = now - start_time
-            report_elapsed = now - last_report_time
+            window_elapsed = now - last_fps_update_time
 
-            if report_elapsed >= 1.0:
-                instant_fps = (frame_count - last_report_count) / report_elapsed
-                avg_fps = frame_count / elapsed if elapsed > 0 else 0.0
+            if window_elapsed >= 0.25:
+                instant_fps = (frame_count - last_fps_update_count) / window_elapsed
+                average_fps = frame_count / elapsed if elapsed > 0 else 0.0
+                last_fps_update_time = now
+                last_fps_update_count = frame_count
+
+            if int(elapsed) != int(max(elapsed - 0.01, 0)) and elapsed >= 1.0:
                 print(
-                    f"[{elapsed:5.1f}s] instant_fps={instant_fps:6.2f} avg_fps={avg_fps:6.2f}"
+                    f"[{elapsed:5.1f}s] instant_fps={instant_fps:6.2f} avg_fps={average_fps:6.2f}"
                 )
-                last_report_time = now
-                last_report_count = frame_count
 
-            if show_display:
-                draw_fps_overlay(frame, instant_fps)
-                cv2.imshow("camera_fps_test", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
+            draw_overlay(frame, instant_fps, average_fps)
+            cv2.imshow(args.window_name, frame)
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord("q"):
+                break
 
-            if elapsed >= args.duration:
+            if args.duration > 0 and elapsed >= args.duration:
                 break
     finally:
         total_elapsed = max(time.time() - start_time, 1e-6)
-        avg_fps = frame_count / total_elapsed
+        final_avg_fps = frame_count / total_elapsed
         print("=" * 60)
         print(f"Captured frames: {frame_count}")
         print(f"Measured time:   {total_elapsed:.2f}s")
-        print(f"Average FPS:     {avg_fps:.2f}")
+        print(f"Average FPS:     {final_avg_fps:.2f}")
         print("=" * 60)
         cap.release()
         cv2.destroyAllWindows()
