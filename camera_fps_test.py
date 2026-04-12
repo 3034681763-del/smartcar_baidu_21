@@ -44,9 +44,9 @@ def build_parser():
         help="Warmup time before measuring in seconds",
     )
     parser.add_argument(
-        "--display",
+        "--no-display",
         action="store_true",
-        help="Show preview window while measuring",
+        help="Disable preview window",
     )
     return parser
 
@@ -57,9 +57,39 @@ def parse_device(device_arg):
     return device_arg
 
 
+def draw_fps_overlay(frame, fps_value):
+    overlay_text = f"FPS: {fps_value:.2f}"
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 0.8
+    thickness = 2
+    text_size, baseline = cv2.getTextSize(overlay_text, font, scale, thickness)
+
+    text_x = max(frame.shape[1] - text_size[0] - 16, 10)
+    text_y = max(text_size[1] + 16, 20)
+
+    cv2.rectangle(
+        frame,
+        (text_x - 10, text_y - text_size[1] - 10),
+        (text_x + text_size[0] + 10, text_y + baseline + 10),
+        (0, 0, 0),
+        -1,
+    )
+    cv2.putText(
+        frame,
+        overlay_text,
+        (text_x, text_y),
+        font,
+        scale,
+        (0, 255, 0),
+        thickness,
+        cv2.LINE_AA,
+    )
+
+
 def main():
     args = build_parser().parse_args()
     device = parse_device(args.device)
+    show_display = not args.no_display
 
     cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
     if not cap.isOpened():
@@ -81,7 +111,12 @@ def main():
     print(f"Actual:    {actual_width}x{actual_height} @ {actual_fps:.2f} FPS")
     print(f"Warmup:    {args.warmup:.1f}s")
     print(f"Measure:   {args.duration}s")
+    print(f"Display:   {'on' if show_display else 'off'}")
+    print("Press q to quit preview early")
     print("=" * 60)
+
+    if show_display:
+        cv2.namedWindow("camera_fps_test", cv2.WINDOW_NORMAL)
 
     warmup_end = time.time() + args.warmup
     while time.time() < warmup_end:
@@ -93,6 +128,7 @@ def main():
     start_time = time.time()
     last_report_time = start_time
     last_report_count = 0
+    instant_fps = 0.0
 
     try:
         while True:
@@ -103,12 +139,6 @@ def main():
 
             frame_count += 1
             now = time.time()
-
-            if args.display:
-                cv2.imshow("camera_fps_test", frame)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
-
             elapsed = now - start_time
             report_elapsed = now - last_report_time
 
@@ -120,6 +150,12 @@ def main():
                 )
                 last_report_time = now
                 last_report_count = frame_count
+
+            if show_display:
+                draw_fps_overlay(frame, instant_fps)
+                cv2.imshow("camera_fps_test", frame)
+                if cv2.waitKey(1) & 0xFF == ord("q"):
+                    break
 
             if elapsed >= args.duration:
                 break
