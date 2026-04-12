@@ -38,32 +38,32 @@ class CameraCapture:
     def setup_paddle_predictor(self, model_path):
         self.model_path = model_path
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"[CamCapture] 巡线模型文件不存在: {model_path}")
+            raise FileNotFoundError(f"[CamCapture] Lane model file not found: {model_path}")
 
         try:
             config = MobileConfig()
             config.set_model_from_file(model_path)
             self.paddle_predictor = create_paddle_predictor(config)
-            print(f"[CamCapture] 巡线模型加载成功: {model_path}")
+            print(f"[CamCapture] Lane model loaded: {model_path}")
         except Exception as exc:
             raise RuntimeError(
-                f"[CamCapture] 巡线模型加载失败: {model_path}. 原因: {exc}"
+                f"[CamCapture] Failed to load lane model: {model_path}. Reason: {exc}"
             ) from exc
 
     def open_camera(self):
         dev_0 = self.find_camera_by_path(self.camera_path_0)
         if dev_0 is None:
-            print(f"[CamCapture] 未找到摄像头: {self.camera_path_0}")
+            print(f"[CamCapture] Camera not found: {self.camera_path_0}")
             return False
 
         self.cap_0 = cv2.VideoCapture(dev_0)
         if not self.cap_0.isOpened():
-            print(f"[CamCapture] 无法打开摄像头: {dev_0}")
+            print(f"[CamCapture] Failed to open camera: {dev_0}")
             return False
 
         self.cap_0.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap_0.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        print(f"[CamCapture] 摄像头就绪: {dev_0}")
+        print(f"[CamCapture] Camera ready: {dev_0}")
         return True
 
     def process_frame(self, frame, shm_image_array):
@@ -73,7 +73,7 @@ class CameraCapture:
     def run_inference(self, frame):
         if self.paddle_predictor is None:
             raise RuntimeError(
-                f"[CamCapture] 巡线模型未初始化，拒绝空载运行。当前模型路径: {self.model_path}"
+                f"[CamCapture] Lane model is not initialized. Current path: {self.model_path}"
             )
 
         img = cv2.resize(frame, (128, 128))
@@ -87,37 +87,97 @@ class CameraCapture:
         self.paddle_predictor.run()
         return self.paddle_predictor.get_output(0).numpy()
 
+    def draw_overlay(self, frame, deviation, infer_speed, fps):
+        display = frame.copy()
+        cv2.putText(
+            display,
+            f"Deviation: {deviation:.2f}",
+            (16, 34),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 255, 0),
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            display,
+            f"InferSpeed: {infer_speed:.2f}",
+            (16, 68),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (0, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            display,
+            f"FPS: {fps:.2f}",
+            (16, 102),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.8,
+            (255, 200, 0),
+            2,
+            cv2.LINE_AA,
+        )
+        cv2.putText(
+            display,
+            "Press q to quit",
+            (16, 136),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA,
+        )
+        return display
+
     def run(self, stop_event):
-        start_time = time.time()
+        window_name = "Lane Preview"
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
         frame_count = 0
+        fps_timer = time.time()
+        current_fps = 0.0
 
-        print("[CamCapture] 巡线摄像头与推理循环已启动")
-        while not stop_event.is_set():
-            ret_0, frame_0 = self.cap_0.read()
+        print("[CamCapture] Lane camera and inference loop started")
+        try:
+            while not stop_event.is_set():
+                ret_0, frame_0 = self.cap_0.read()
+                if not ret_0:
+                    continue
 
-            elapsed_time = time.time() - start_time
-            if elapsed_time >= 1.0:
-                fps0 = frame_count / elapsed_time
-                print(f"[CamCapture] 实时推理帧率: {fps0:.2f} FPS")
-                frame_count = 0
-                start_time = time.time()
-
-            if ret_0:
                 frame_count += 1
+                elapsed_time = time.time() - fps_timer
+                if elapsed_time >= 1.0:
+                    current_fps = frame_count / elapsed_time
+                    print(f"[CamCapture] Inference FPS: {current_fps:.2f}")
+                    frame_count = 0
+                    fps_timer = time.time()
+
                 frame_0 = cv2.resize(frame_0, (640, 640), interpolation=cv2.INTER_AREA)
                 lane_infer_ret = self.run_inference(frame_0)
-                lane_infer_ret[0][0] *= 1.1
+                deviation = float(lane_infer_ret[0][0]) * 1.1
+                infer_speed = float(lane_infer_ret[0][1])
 
-                ret_bytes = struct.pack("=ff", lane_infer_ret[0][0], lane_infer_ret[0][1])
+                ret_bytes = struct.pack("=ff", deviation, infer_speed)
                 self.shm_lane_ret_bytes.buf[0:len(ret_bytes)] = ret_bytes
                 self.process_frame(
                     frame_0,
                     np.ndarray(frame_0.shape, dtype=frame_0.dtype, buffer=self.shm_image_0.buf),
                 )
 
-        print("[CamCapture] 收到终止信号，准备退出")
-        if self.cap_0 is not None:
-            self.cap_0.release()
+                preview = self.draw_overlay(frame_0, deviation, infer_speed, current_fps)
+                cv2.imshow(window_name, preview)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
+                    print("[CamCapture] q pressed, stopping framework")
+                    stop_event.set()
+                    break
+        finally:
+            print("[CamCapture] Stopping camera process")
+            if self.cap_0 is not None:
+                self.cap_0.release()
+            cv2.destroyAllWindows()
 
 
 def vidpub_course(stop_event, shm0, shm_lane, model_path="src/cnn_auto.nb", camera_path="1-2.2:1.0"):
