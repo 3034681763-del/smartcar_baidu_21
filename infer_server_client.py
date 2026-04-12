@@ -1,11 +1,15 @@
 # !/usr/bin/env python3
+import os
 import pickle
 import socket
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
+
+DEFAULT_PADDLE_JETSON_PATH = "/home/jetson/workspace/code_vehicle_wbt/paddle_jetson"
 
 
 model_configs = [
@@ -24,6 +28,24 @@ model_configs = [
         "img_size": [640, 640],
     },
 ]
+
+
+def ensure_paddle_jetson_importable():
+    configured_path = os.environ.get("PADDLE_JETSON_PATH", DEFAULT_PADDLE_JETSON_PATH)
+    if not configured_path:
+        return
+
+    normalized_path = os.path.abspath(configured_path)
+    search_path = (
+        os.path.dirname(normalized_path)
+        if os.path.basename(normalized_path) == "paddle_jetson"
+        else normalized_path
+    )
+
+    if search_path not in sys.path:
+        sys.path.insert(0, search_path)
+
+    print(f"[InferServer] paddle_jetson search path: {search_path}")
 
 
 def send_pickle(conn: socket.socket, obj):
@@ -45,6 +67,7 @@ def recv_pickle(conn: socket.socket):
 
 class ModelManager:
     def __init__(self, cfg):
+        ensure_paddle_jetson_importable()
         from paddle_jetson import OCRReco, YoloeInfer
 
         model_map = {
