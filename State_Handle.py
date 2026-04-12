@@ -14,7 +14,7 @@ class TaskManager:
     Main state machine with a judge thread and a handler thread.
     """
 
-    def __init__(self, request_queue=None, publish_queue=None):
+    def __init__(self, request_queue=None, publish_queue=None, enable_aux_models=True):
         self.movebase = Base_func(request_queue=request_queue)
 
         self.current_task = "Lane"
@@ -28,16 +28,24 @@ class TaskManager:
         self.shm_manager.create_block("shm_crop", size=640 * 640 * 3)
 
         self.task_clients = {}
-        for cfg in model_configs:
-            self.task_clients[cfg["name"]] = InferClient1(cfg["name"], self.shm_manager, cfg["port"])
+        self.task_client = None
+        self.ocr_reader = None
+        self.enable_aux_models = enable_aux_models
 
-        self.task_client = self.task_clients["task"]
-        self.ocr_reader = OCRPipeline(
-            self.shm_manager,
-            self.task_clients["task"],
-            self.task_clients["word"],
-            crop_key="shm_crop",
-        )
+        if self.enable_aux_models:
+            for cfg in model_configs:
+                self.task_clients[cfg["name"]] = InferClient1(cfg["name"], self.shm_manager, cfg["port"])
+
+            self.task_client = self.task_clients["task"]
+            self.ocr_reader = OCRPipeline(
+                self.shm_manager,
+                self.task_clients["task"],
+                self.task_clients["word"],
+                crop_key="shm_crop",
+            )
+            print("[TaskManager] Auxiliary model clients are ready.")
+        else:
+            print("[TaskManager] Auxiliary model clients are disabled.")
 
         from move_base import Task_func
 
@@ -45,6 +53,8 @@ class TaskManager:
         self.current_sensor_data = {}
 
     def read_text_once(self, result_amount=1, sort_by="y"):
+        if self.ocr_reader is None:
+            return []
         return self.ocr_reader.read_texts(
             shm_key="shm_0",
             shape=(640, 640, 3),

@@ -12,6 +12,7 @@ from shared_memory_manager import SharedMemoryManager
 SERIAL_PHYSICAL_PATH = "2.2:1.0"
 CAMERA_DEVICE = "/dev/video0"
 LANE_MODEL_PATH = "/home/jetson/workspace_plus/vehicle_wbt_21th_lane/src/cnn_auto.nb"
+ENABLE_AUX_MODELS = False
 
 
 def start_framework():
@@ -40,16 +41,23 @@ def start_framework():
         args=("shm_0", "shm_lane", LANE_MODEL_PATH, CAMERA_DEVICE),
     )
 
-    print("[Main] Starting task and OCR model services...")
-    for cfg in model_configs:
-        mgr.add_process(target=serve_model_process, args=(cfg, shm_manager))
+    if ENABLE_AUX_MODELS:
+        print("[Main] Starting task and OCR model services...")
+        for cfg in model_configs:
+            mgr.add_process(target=serve_model_process, args=(cfg, shm_manager))
+    else:
+        print("[Main] Auxiliary task/OCR model services are disabled.")
 
     mgr.start_all()
 
     time.sleep(1.5)
 
     print("[Main] Starting state manager...")
-    brain = TaskManager(request_queue=request_queue, publish_queue=publish_queue)
+    brain = TaskManager(
+        request_queue=request_queue,
+        publish_queue=publish_queue,
+        enable_aux_models=ENABLE_AUX_MODELS,
+    )
     brain.start()
 
     try:
