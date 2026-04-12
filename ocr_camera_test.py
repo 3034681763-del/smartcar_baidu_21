@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import argparse
+import os
+import sys
 import time
 
 import cv2
@@ -52,6 +54,11 @@ def build_parser():
         "--label",
         default="text",
         help="Target detection label to crop before OCR",
+    )
+    parser.add_argument(
+        "--paddle-jetson-path",
+        default="/home/jetson/workspace/code_vehicle_wbt/paddle_jetson",
+        help="Optional paddle_jetson directory or its parent directory",
     )
     return parser
 
@@ -109,8 +116,29 @@ def crop_from_detection(frame, det, pad=12):
     return frame[y1:y2, x1:x2]
 
 
-def run_ocr_on_frame(frame, task_model, ocr_model, target_label):
-    from paddle_jetson import OCRReco, YoloeInfer
+def load_paddle_jetson(optional_path=""):
+    if optional_path:
+        optional_path = os.path.expanduser(optional_path)
+        normalized = os.path.abspath(optional_path)
+        module_dir = normalized
+        if os.path.basename(normalized) == "paddle_jetson":
+            module_dir = os.path.dirname(normalized)
+        if module_dir not in sys.path:
+            sys.path.insert(0, module_dir)
+
+    try:
+        from paddle_jetson import OCRReco, YoloeInfer
+        return OCRReco, YoloeInfer
+    except ModuleNotFoundError as exc:
+        raise ModuleNotFoundError(
+            "Cannot import paddle_jetson. "
+            "Please activate the correct Python environment or pass "
+            "--paddle-jetson-path /path/to/paddle_jetson or its parent directory"
+        ) from exc
+
+
+def run_ocr_on_frame(frame, task_model, ocr_model, target_label, paddle_jetson_path=""):
+    OCRReco, YoloeInfer = load_paddle_jetson(paddle_jetson_path)
 
     detector = YoloeInfer(task_model)
     ocr = OCRReco(ocr_model)
@@ -195,6 +223,8 @@ def main():
     print(f"Codec:       {args.codec}")
     print(f"Task model:  {args.task_model}")
     print(f"OCR model:   {args.ocr_model}")
+    if args.paddle_jetson_path:
+        print(f"Module dir:  {args.paddle_jetson_path}")
     print("Press q in the preview window to capture and OCR.")
     print("=" * 60)
 
@@ -233,6 +263,7 @@ def main():
         task_model=args.task_model,
         ocr_model=args.ocr_model,
         target_label=args.label,
+        paddle_jetson_path=args.paddle_jetson_path,
     )
     elapsed = time.time() - start_time
 
