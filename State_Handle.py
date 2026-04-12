@@ -1,9 +1,9 @@
+from queue import Empty
 import threading
 import time
 
 import numpy as np
 
-import Zmq_mod
 from infer_server_client import InferClient1, OCRPipeline, model_configs
 from move_base import Base_func
 from shared_memory_manager import SharedMemoryManager
@@ -14,14 +14,13 @@ class TaskManager:
     Main state machine with a judge thread and a handler thread.
     """
 
-    def __init__(self):
-        self.movebase = Base_func()
+    def __init__(self, request_queue=None, publish_queue=None):
+        self.movebase = Base_func(request_queue=request_queue)
 
         self.current_task = "Lane"
         self.stopJudge = threading.Event()
         self.stopHandle = threading.Event()
-
-        self.zmq_sub_info = Zmq_mod.ZMQComm(mode="sub", address="ipc:///tmp/SubUartInfo.ipc")
+        self.publish_queue = publish_queue
 
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_0", size=640 * 640 * 3)
@@ -60,8 +59,11 @@ class TaskManager:
         no_data_count = 0
 
         while not self.stopJudge.is_set():
-            time.sleep(0.02)
-            sub_msg = self.zmq_sub_info.receive()
+            try:
+                sub_msg = self.publish_queue.get(timeout=0.02) if self.publish_queue else None
+            except Empty:
+                sub_msg = None
+
             if sub_msg and isinstance(sub_msg, dict):
                 no_data_count = 0
                 if sub_msg.get("cmd") == "PushResp":
@@ -112,7 +114,6 @@ class TaskManager:
         self.stopJudge.set()
         self.stopHandle.set()
         self.movebase.MOD_STOP()
-        self.zmq_sub_info.close()
         for client in self.task_clients.values():
             client.close()
         self.shm_manager.release_all()

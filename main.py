@@ -1,3 +1,4 @@
+import multiprocessing
 import sys
 import time
 
@@ -22,11 +23,16 @@ def start_framework():
     shm_manager.create_block("shm_0", size=640 * 640 * 3)
     shm_manager.create_block("shm_lane", size=8)
     shm_manager.create_block("shm_crop", size=640 * 640 * 3)
+    request_queue = multiprocessing.Queue()
+    publish_queue = multiprocessing.Queue()
 
     mgr = ProcessManager()
 
     print("[Main] Starting UART service process...")
-    mgr.add_process(target=serial_server_process, args=(SERIAL_PHYSICAL_PATH,))
+    mgr.add_process(
+        target=serial_server_process,
+        args=(SERIAL_PHYSICAL_PATH, 115200, request_queue, publish_queue),
+    )
 
     print("[Main] Starting lane camera process...")
     mgr.add_process(
@@ -43,7 +49,7 @@ def start_framework():
     time.sleep(1.5)
 
     print("[Main] Starting state manager...")
-    brain = TaskManager()
+    brain = TaskManager(request_queue=request_queue, publish_queue=publish_queue)
     brain.start()
 
     try:

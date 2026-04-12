@@ -1,20 +1,16 @@
-import Zmq_mod
 from shared_memory_manager import SharedMemoryManager
 
 
 class Base_func:
     """Base control bridge for chassis and actuator commands."""
 
-    def __init__(self, mode="normal"):
+    def __init__(self, mode="normal", request_queue=None):
         self.mode = mode
-        self.zmq_req = None
+        self.request_queue = request_queue
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_lane", size=8)
 
     def MOD_LANE(self, base_speed=-0.28):
-        if self.zmq_req is None:
-            self.zmq_req = Zmq_mod.ZMQComm(mode="req", address="ipc:///tmp/MainWithUart.ipc")
-
         try:
             angle, infer_speed = self.shm_manager.read_floats("shm_lane", 2)
             del infer_speed
@@ -36,31 +32,19 @@ class Base_func:
                 "deviation": float(angle),
                 "speed_x": float(target_speed),
             }
-            self.zmq_req.send(data)
-            reply = self.zmq_req.receive()
-
-            if reply is None:
-                print("[MoveBase] ZMQ timeout, rebuilding REQ socket...")
-                self.zmq_req.close()
-                self.zmq_req = None
-            elif reply.get("status") != "ok":
-                print(f"[MoveBase] Warning: UART Server returned error: {reply}")
+            if self.request_queue is None:
+                print("[MoveBase] Request queue is not configured.")
+                return
+            self.request_queue.put(data)
         except Exception as exc:
             print(f"[MoveBase] Lane Following Exec Error: {exc}")
-            if self.zmq_req:
-                self.zmq_req.close()
-                self.zmq_req = None
 
     def MOD_STOP(self):
-        if self.zmq_req is None:
-            self.zmq_req = Zmq_mod.ZMQComm(mode="req", address="ipc:///tmp/MainWithUart.ipc")
         data = {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 0, "z_angle": 0}
-        self.zmq_req.send(data)
-        self.zmq_req.receive()
+        if self.request_queue is not None:
+            self.request_queue.put(data)
 
     def execute_arm_motion(self, mot0, mot1, mot2, mot3, suck=0, light=0):
-        if self.zmq_req is None:
-            self.zmq_req = Zmq_mod.ZMQComm(mode="req", address="ipc:///tmp/MainWithUart.ipc")
         data = {
             "cmd": "Arm",
             "mot0": mot0,
@@ -70,15 +54,15 @@ class Base_func:
             "suck": suck,
             "light": light,
         }
-        self.zmq_req.send(data)
-        return self.zmq_req.receive()
+        if self.request_queue is not None:
+            self.request_queue.put(data)
+        return {"status": "queued", "cmd": "Arm"}
 
     def set_sys_mode(self, flag):
-        if self.zmq_req is None:
-            self.zmq_req = Zmq_mod.ZMQComm(mode="req", address="ipc:///tmp/MainWithUart.ipc")
         data = {"cmd": "SysMode", "flag": flag}
-        self.zmq_req.send(data)
-        return self.zmq_req.receive()
+        if self.request_queue is not None:
+            self.request_queue.put(data)
+        return {"status": "queued", "cmd": "SysMode"}
 
 
 class Task_func:

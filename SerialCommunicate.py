@@ -1,10 +1,9 @@
 import struct
 import time
+from queue import Empty, Queue
 from threading import Thread
 
 import serial
-
-import Zmq_mod
 
 
 class SerialCommunicate:
@@ -153,19 +152,23 @@ class SerialCommunicate:
 
 
 class SerialServer:
-    def __init__(self, serial_path="1-2.1:1.0", baudrate=115200):
+    def __init__(self, serial_path="1-2.1:1.0", baudrate=115200, request_queue=None, publish_queue=None):
         self.serial_comm = SerialCommunicate(serial_path, baudrate)
-        self.zmq_req = Zmq_mod.ZMQComm(mode="rep", address="ipc:///tmp/MainWithUart.ipc")
-        self.zmq_pub = Zmq_mod.ZMQComm(mode="pub", address="ipc:///tmp/SubUartInfo.ipc")
         self.flag_exit = False
+        self.request_queue = request_queue or Queue()
+        self.publish_queue = publish_queue or Queue()
 
-    def process_rep_requests(self):
+    def process_rep_requests(self, timeout=0.1):
         while not self.flag_exit:
             try:
-                req = self.zmq_req.receive()
-                if not req:
-                    continue
+                req = self.request_queue.get(timeout=timeout)
+            except Empty:
+                continue
+            except Exception as exc:
+                print(f"[SerialServer] Queue read error: {exc}")
+                continue
 
+            try:
                 cmd_type = req.get("cmd")
                 if cmd_type == "Motion":
                     mode = req.get("mode")
@@ -193,8 +196,6 @@ class SerialServer:
                     )
                 elif cmd_type == "SysMode":
                     self.serial_comm.send_mode_flag(req["flag"])
-
-                self.zmq_req.send({"status": "ok"})
             except Exception as exc:
                 print(f"[SerialServer] Request error: {exc}")
 
@@ -202,7 +203,7 @@ class SerialServer:
         while not self.flag_exit:
             data = self.serial_comm.last_response
             if data:
-                self.zmq_pub.send({"cmd": "PushResp", "data": data})
+                self.publish_queue.put({"cmd": "PushResp", "data": data})
             time.sleep(0.02)
 
     def run(self, stop_event=None):
@@ -218,12 +219,21 @@ class SerialServer:
 
     def close(self):
         self.flag_exit = True
-        self.zmq_req.close()
-        self.zmq_pub.close()
         self.serial_comm.close()
 
 
-def serial_server_process(stop_event, physical_path="1-2.1:1.0"):
+def serial_server_process(
+    stop_event,
+    physical_path="1-2.1:1.0",
+    baudrate=115200,
+    request_queue=None,
+    publish_queue=None,
+):
     print("[SerialServer] Hardware communication subprocess started")
-    server = SerialServer(serial_path=physical_path)
+    server = SerialServer(
+        serial_path=physical_path,
+        baudrate=baudrate,
+        request_queue=request_queue,
+        publish_queue=publish_queue,
+    )
     server.run(stop_event)
