@@ -12,7 +12,7 @@ from shared_memory_manager import SharedMemoryManager
 SERIAL_PHYSICAL_PATH = "2.2:1.0"
 CAMERA_DEVICE = "/dev/video0"
 LANE_MODEL_PATH = "/home/jetson/workspace_plus/vehicle_wbt_21th_lane/src/cnn_auto.nb"
-ENABLE_AUX_MODELS = False
+ENABLE_AUX_MODELS = True
 
 
 def start_framework():
