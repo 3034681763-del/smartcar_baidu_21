@@ -19,6 +19,14 @@ class CameraCapture:
         self.paddle_predictor = None
         self.model_path = None
 
+    @staticmethod
+    def normalize_camera_device(device):
+        if isinstance(device, str) and device.startswith("/dev/video"):
+            suffix = device.rsplit("video", 1)[-1]
+            if suffix.isdigit():
+                return int(suffix)
+        return device
+
     def find_camera_by_path(self, physical_path):
         if isinstance(physical_path, str) and physical_path.startswith("/dev/video"):
             return physical_path
@@ -56,14 +64,35 @@ class CameraCapture:
             print(f"[CamCapture] Camera not found: {self.camera_path_0}")
             return False
 
-        self.cap_0 = cv2.VideoCapture(dev_0)
+        open_target = self.normalize_camera_device(dev_0)
+        self.cap_0 = cv2.VideoCapture(open_target, cv2.CAP_V4L2)
+
+        if not self.cap_0.isOpened():
+            print(f"[CamCapture] Failed to open camera with V4L2 backend: {dev_0}")
+            self.cap_0 = cv2.VideoCapture(open_target)
         if not self.cap_0.isOpened():
             print(f"[CamCapture] Failed to open camera: {dev_0}")
             return False
 
+        self.cap_0.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         self.cap_0.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
         self.cap_0.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.cap_0.set(cv2.CAP_PROP_FPS, 60)
+        self.cap_0.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.cap_0.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap_0.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+
+        actual_width = int(self.cap_0.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_height = int(self.cap_0.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        actual_fps = self.cap_0.get(cv2.CAP_PROP_FPS)
+        actual_fourcc = int(self.cap_0.get(cv2.CAP_PROP_FOURCC))
+        actual_codec = "".join(chr((actual_fourcc >> (8 * i)) & 0xFF) for i in range(4))
+
         print(f"[CamCapture] Camera ready: {dev_0}")
+        print(
+            f"[CamCapture] Camera config: {actual_width}x{actual_height} "
+            f"@ {actual_fps:.2f} FPS, codec={actual_codec}"
+        )
         return True
 
     def process_frame(self, frame, shm_image_array):
