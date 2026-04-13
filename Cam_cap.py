@@ -19,14 +19,6 @@ class CameraCapture:
         self.paddle_predictor = None
         self.model_path = None
 
-    @staticmethod
-    def normalize_camera_device(device):
-        if isinstance(device, str) and device.startswith("/dev/video"):
-            suffix = device.rsplit("video", 1)[-1]
-            if suffix.isdigit():
-                return int(suffix)
-        return device
-
     def find_camera_by_path(self, physical_path):
         if isinstance(physical_path, str) and physical_path.startswith("/dev/video"):
             return physical_path
@@ -64,7 +56,8 @@ class CameraCapture:
             print(f"[CamCapture] Camera not found: {self.camera_path_0}")
             return False
 
-        open_target = self.normalize_camera_device(dev_0)
+        # Match the known-good fps test script exactly: open the device path with V4L2.
+        open_target = dev_0
         self.cap_0 = cv2.VideoCapture(open_target, cv2.CAP_V4L2)
 
         if not self.cap_0.isOpened():
