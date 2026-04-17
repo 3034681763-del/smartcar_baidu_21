@@ -1,3 +1,5 @@
+import glob
+import os
 import struct
 import time
 from queue import Empty, Queue
@@ -31,11 +33,45 @@ class SerialCommunicate:
     def find_serial_by_path(self, physical_path):
         import pyudev
 
+        if not physical_path:
+            return None
+
+        if physical_path.startswith("/dev/") and os.path.exists(physical_path):
+            return physical_path
+
+        by_path_dir = "/dev/serial/by-path"
+        if os.path.isdir(by_path_dir):
+            for link_name in sorted(os.listdir(by_path_dir)):
+                if physical_path in link_name:
+                    resolved_path = os.path.realpath(os.path.join(by_path_dir, link_name))
+                    if os.path.exists(resolved_path):
+                        print(f"[UART] Matched by-path entry: {link_name} -> {resolved_path}")
+                        return resolved_path
+
         context = pyudev.Context()
-        for device in context.list_devices(subsystem="usb-serial"):
-            path = device.device_path.rsplit("/", 1)[0]
-            if path.endswith(physical_path):
-                return "/dev/" + device.device_path.rsplit("/", 1)[1]
+        for subsystem in ("usb-serial", "tty"):
+            for device in context.list_devices(subsystem=subsystem):
+                device_node = getattr(device, "device_node", None)
+                if not device_node:
+                    continue
+
+                path_candidates = [
+                    getattr(device, "device_path", ""),
+                    getattr(device, "sys_path", ""),
+                ]
+                if any(path and physical_path in path for path in path_candidates):
+                    return device_node
+
+                links = getattr(device, "device_links", [])
+                if any(physical_path in link for link in links):
+                    return device_node
+
+        for pattern in ("/dev/ttyUSB*", "/dev/ttyACM*"):
+            for device_node in sorted(glob.glob(pattern)):
+                if os.path.exists(device_node):
+                    print(f"[UART] Fallback serial candidate: {device_node}")
+                    return device_node
+
         return None
 
     @staticmethod
