@@ -11,7 +11,7 @@ from shared_memory_manager import SharedMemoryManager
 
 SERIAL_PHYSICAL_PATH = "2.2:1.0"
 LANE_CAMERA_DEVICE = "/dev/video0"
-TASK_CAMERA_DEVICE = "/dev/video1"
+TASK_CAMERA_DEVICE = "/dev/video2"
 LANE_MODEL_PATH = "/home/jetson/workspace_plus/vehicle_wbt_21th_lane/src/cnn_auto.nb"
 ENABLE_AUX_MODELS = True
 
