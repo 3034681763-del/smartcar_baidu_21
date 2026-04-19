@@ -22,17 +22,60 @@ class CameraCapture:
         self.paddle_predictor = None
         self.model_path = None
 
-    def find_camera_by_path(self, physical_path):
+    def find_camera_nodes_by_path(self, physical_path):
         if isinstance(physical_path, str) and physical_path.startswith("/dev/video"):
-            return physical_path
+            return [physical_path]
 
         context = pyudev.Context()
+        candidates = []
         for device in context.list_devices(subsystem="video4linux"):
+            device_node = getattr(device, "device_node", None)
+            if not device_node:
+                continue
+
             end_index = device.device_path.rfind("/video4linux")
             cleaned_string = device.device_path[:end_index] if end_index != -1 else device.device_path
             if cleaned_string.endswith(physical_path):
-                return "/dev/" + device.device_path.rsplit("/", 1)[1]
-        return None
+                candidates.append(device_node)
+
+        def sort_key(node):
+            try:
+                return int(node.rsplit("video", 1)[1])
+            except (IndexError, ValueError):
+                return 10**9
+
+        return sorted(set(candidates), key=sort_key)
+
+    def _open_candidate_device(self, device, role_name):
+        capture = cv2.VideoCapture(device, cv2.CAP_V4L2)
+        if not capture.isOpened():
+            print(f"[CamCapture] Failed to open {role_name} camera with V4L2 backend: {device}")
+            capture = cv2.VideoCapture(device)
+        if not capture.isOpened():
+            print(f"[CamCapture] Failed to open {role_name} camera: {device}")
+            return None
+
+        capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        capture.set(cv2.CAP_PROP_FPS, 60)
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
+        ok = False
+        for _ in range(5):
+            ok, _ = capture.read()
+            if ok:
+                break
+            time.sleep(0.02)
+
+        if not ok:
+            print(f"[CamCapture] {role_name} camera node is not streaming frames: {device}")
+            capture.release()
+            return None
+
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        return capture
 
     def setup_shared_memory(self, lane_shm_name, task_shm_name, shm_lane_name):
         self.shm_lane_image = shared_memory.SharedMemory(name=lane_shm_name)
@@ -55,26 +98,23 @@ class CameraCapture:
             ) from exc
 
     def open_single_camera(self, physical_path, role_name):
-        device = self.find_camera_by_path(physical_path)
-        if device is None:
+        candidates = self.find_camera_nodes_by_path(physical_path)
+        if not candidates:
             print(f"[CamCapture] {role_name} camera not found: {physical_path}")
             return None
 
-        capture = cv2.VideoCapture(device, cv2.CAP_V4L2)
-        if not capture.isOpened():
-            print(f"[CamCapture] Failed to open {role_name} camera with V4L2 backend: {device}")
-            capture = cv2.VideoCapture(device)
-        if not capture.isOpened():
-            print(f"[CamCapture] Failed to open {role_name} camera: {device}")
-            return None
+        print(f"[CamCapture] {role_name} camera candidates for {physical_path}: {candidates}")
+        capture = None
+        device = None
+        for candidate in candidates:
+            capture = self._open_candidate_device(candidate, role_name)
+            if capture is not None:
+                device = candidate
+                break
 
-        capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        capture.set(cv2.CAP_PROP_FPS, 60)
-        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        if capture is None or device is None:
+            print(f"[CamCapture] No usable {role_name} camera node found for: {physical_path}")
+            return None
 
         actual_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
         actual_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
