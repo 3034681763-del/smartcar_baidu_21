@@ -109,19 +109,30 @@ class SerialCommunicate:
                 data_field = tmp_data[3:frame_len - 1]
                 cmd = struct.unpack("=b", tmp_data[1])[0]
 
-                if cmd == 0x01 and len(data_field) == 18:
-                    byte_data = b"".join(data_field)
-                    facheflag, cheatflag, dist_sensorl, dist_sensorr, world_y, world_z_angle = struct.unpack(
-                        "=BBffff", bytes(byte_data)
-                    )
-                    self.last_response = {
-                        "Fache_flag": facheflag,
-                        "Cheat_flag": cheatflag,
-                        "dist_sensorL": dist_sensorl,
-                        "dist_sensorR": dist_sensorr,
-                        "world_y": world_y,
-                        "world_z_angle": world_z_angle,
-                    }
+                if cmd == 0x01:
+                    if len(data_field) == 18:
+                        byte_data = b"".join(data_field)
+                        facheflag, cheatflag, dist_sensorl, dist_sensorr, world_y, world_z_angle = struct.unpack(
+                            "=BBffff", bytes(byte_data)
+                        )
+                        if cheatflag == 123:
+                            dist_sensorl = int(dist_sensorl)
+                            dist_sensorr = int(dist_sensorr)
+                            world_y = int(world_y)
+                            world_z_angle = int(world_z_angle)
+
+                        self.last_response = {
+                            "Fache_flag": facheflag,
+                            "Cheat_flag": cheatflag,
+                            "dist_sensorL": dist_sensorl,
+                            "dist_sensorR": dist_sensorr,
+                            "world_y": world_y,
+                            "world_z_angle": world_z_angle,
+                        }
+                    else:
+                        print("[UART] Invalid payload length for cmd 0x01, frame dropped")
+                else:
+                    print(f"[UART] Unknown upstream cmd: {cmd}")
             except Exception as exc:
                 print(f"[UART] Receive error: {exc}")
 

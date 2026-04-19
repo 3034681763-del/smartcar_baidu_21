@@ -21,6 +21,12 @@ class TaskManager:
         self.stopJudge = threading.Event()
         self.stopHandle = threading.Event()
         self.publish_queue = publish_queue
+        self.fache = 0
+        self.cheat_flag = 0
+        self.tofL = 5000
+        self.tofR = 5000
+        self.world_y = 0
+        self.angz = 0
 
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_0", size=640 * 640 * 3)
@@ -78,6 +84,12 @@ class TaskManager:
                 no_data_count = 0
                 if sub_msg.get("cmd") == "PushResp":
                     self.current_sensor_data = sub_msg.get("data", {})
+                    self.fache = self.current_sensor_data.get("Fache_flag", 0)
+                    self.cheat_flag = self.current_sensor_data.get("Cheat_flag", 0)
+                    self.tofL = self.current_sensor_data.get("dist_sensorL", 5000)
+                    self.tofR = self.current_sensor_data.get("dist_sensorR", 5000)
+                    self.world_y = self.current_sensor_data.get("world_y", 0)
+                    self.angz = self.current_sensor_data.get("world_z_angle", 0)
             else:
                 no_data_count += 1
                 if no_data_count > 100:
