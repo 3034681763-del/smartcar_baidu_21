@@ -1,0 +1,37 @@
+{
+  "BASE_MOTION": {
+    "Default": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 0, "z_angle": 0}
+    ],
+    "Front": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 120, "z_angle": 0}
+    ],
+    "Back": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": -120, "z_angle": 0}
+    ],
+    "moveshort": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 60, "z_angle": 0}
+    ],
+    "backshort": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": -60, "z_angle": 0}
+    ],
+    "movelong": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 240, "z_angle": 0}
+    ],
+    "backlong": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": -240, "z_angle": 0}
+    ],
+    "TurnLeft": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 0, "z_angle": 45}
+    ],
+    "TurnRight": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 0, "z_angle": -45}
+    ],
+    "TurnLeftSmall": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 0, "z_angle": 20}
+    ],
+    "TurnRightSmall": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 0, "z_angle": -20}
+    ]
+  }
+}

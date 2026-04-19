@@ -125,6 +125,9 @@ class TaskManager:
                 self.movebase.MOD_LANE(base_speed=-0.28)
             elif task_key == "tracking":
                 self.task_func.tracking_executor()
+            elif task_key == "basetest":
+                self.task_func.base_motion_test_executor()
+                self.current_task = "Lane"
             elif task == "Task1":
                 self.task_func.task1_executor()
                 self.current_task = "Lane"

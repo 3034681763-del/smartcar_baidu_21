@@ -3,6 +3,7 @@ import time
 import numpy as np
 
 from box_pid import BoxPidAligner
+from get_json import load_params
 from shared_memory_manager import SharedMemoryManager
 from tool_func import get_only_box
 
@@ -10,11 +11,12 @@ from tool_func import get_only_box
 class Base_func:
     """Base control bridge for chassis and actuator commands."""
 
-    def __init__(self, mode="normal", request_queue=None):
+    def __init__(self, mode="normal", request_queue=None, base_file="motion.json"):
         self.mode = mode
         self.request_queue = request_queue
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_lane", size=8)
+        self.base_actions = load_params(filename=base_file).get("BASE_MOTION", {})
 
     def MOD_LANE(self, base_speed=-0.28):
         try:
@@ -53,6 +55,18 @@ class Base_func:
     def send_motion_command(self, data):
         if self.request_queue is not None:
             self.request_queue.put(data)
+
+    def execute_base_motion(self, action_key, countdown=1.0):
+        motion_list = self.base_actions.get(action_key, [])
+        if not motion_list:
+            print(f"[MoveBase] Base action not found: {action_key}")
+            return False
+
+        for motion in motion_list:
+            self.send_motion_command(motion)
+            time.sleep(0.02)
+            time.sleep(countdown)
+        return True
 
     def execute_arm_motion(self, mot0, mot1, mot2, mot3, suck=0, light=0):
         data = {
@@ -116,6 +130,30 @@ class Task_func:
 
     def task4_executor(self):
         print("[Task_func] Executing Task 4 placeholder...")
+
+    def base_motion_test_executor(self):
+        print("[Task_func] Executing base motion group test...")
+        test_sequence = [
+            ("Default", 0.3),
+            ("moveshort", 0.6),
+            ("backshort", 0.6),
+            ("movelong", 0.8),
+            ("backlong", 0.8),
+            ("TurnLeftSmall", 0.6),
+            ("TurnRightSmall", 0.6),
+            ("TurnLeft", 0.8),
+            ("TurnRight", 0.8),
+            ("Default", 0.3),
+        ]
+
+        for action_key, countdown in test_sequence:
+            print(f"[Task_func] Base motion -> {action_key}")
+            if not self.base.execute_base_motion(action_key, countdown=countdown):
+                print(f"[Task_func] Base motion test aborted at: {action_key}")
+                return False
+
+        print("[Task_func] Base motion group test finished.")
+        return True
 
     def tracking_executor(self, target_pose=(320, 240), cam_pose="L", timeout_s=5.0):
         if self.task_client is None:
