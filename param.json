@@ -1,0 +1,66 @@
+{
+  "TRACKING_PID": {
+    "Fast": {
+      "x_pid": {
+        "kp_small": 0.05,
+        "kp_medium": 0.09,
+        "kp_large": 0.15,
+        "ke_small": 15,
+        "ke_medium": 150,
+        "ke_max": 640,
+        "ki": 0.2,
+        "kd": 0.0,
+        "int_sep_thr": 190,
+        "int_max": 8.0,
+        "output_max": 18.0
+      },
+      "y_pid": {
+        "kp_small": 0.05,
+        "kp_medium": 0.09,
+        "kp_large": 0.11,
+        "ke_small": 15,
+        "ke_medium": 150,
+        "ke_max": 640,
+        "ki": 0.2,
+        "kd": 0.0,
+        "int_sep_thr": 190,
+        "int_max": 8.0,
+        "output_max": 18.0
+      },
+      "x_threshold": 15.0,
+      "y_threshold": 15.0,
+      "judge_count": 3
+    },
+    "Slow": {
+      "x_pid": {
+        "kp_small": 0.03,
+        "kp_medium": 0.06,
+        "kp_large": 0.05,
+        "ke_small": 15,
+        "ke_medium": 300,
+        "ke_max": 640,
+        "ki": 0.1,
+        "kd": 0.0,
+        "int_sep_thr": 300,
+        "int_max": 7.0,
+        "output_max": 8.0
+      },
+      "y_pid": {
+        "kp_small": 0.03,
+        "kp_medium": 0.06,
+        "kp_large": 0.05,
+        "ke_small": 15,
+        "ke_medium": 300,
+        "ke_max": 640,
+        "ki": 0.1,
+        "kd": 0.0,
+        "int_sep_thr": 300,
+        "int_max": 7.0,
+        "output_max": 8.0
+      },
+      "x_threshold": 15.0,
+      "y_threshold": 15.0,
+      "judge_count": 3
+    }
+  }
+}

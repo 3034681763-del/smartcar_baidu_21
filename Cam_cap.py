@@ -11,11 +11,14 @@ from paddlelite.lite import MobileConfig, create_paddle_predictor
 
 
 class CameraCapture:
-    def __init__(self, camera_path_0):
-        self.camera_path_0 = camera_path_0
-        self.shm_image_0 = None
+    def __init__(self, lane_camera_path, task_camera_path):
+        self.lane_camera_path = lane_camera_path
+        self.task_camera_path = task_camera_path
+        self.shm_lane_image = None
+        self.shm_task_image = None
         self.shm_lane_ret_bytes = None
-        self.cap_0 = None
+        self.lane_cap = None
+        self.task_cap = None
         self.paddle_predictor = None
         self.model_path = None
 
@@ -31,8 +34,9 @@ class CameraCapture:
                 return "/dev/" + device.device_path.rsplit("/", 1)[1]
         return None
 
-    def setup_shared_memory(self, shm_img_name, shm_lane_name):
-        self.shm_image_0 = shared_memory.SharedMemory(name=shm_img_name)
+    def setup_shared_memory(self, lane_shm_name, task_shm_name, shm_lane_name):
+        self.shm_lane_image = shared_memory.SharedMemory(name=lane_shm_name)
+        self.shm_task_image = shared_memory.SharedMemory(name=task_shm_name)
         self.shm_lane_ret_bytes = shared_memory.SharedMemory(name=shm_lane_name)
 
     def setup_paddle_predictor(self, model_path):
@@ -50,42 +54,52 @@ class CameraCapture:
                 f"[CamCapture] Failed to load lane model: {model_path}. Reason: {exc}"
             ) from exc
 
-    def open_camera(self):
-        dev_0 = self.find_camera_by_path(self.camera_path_0)
-        if dev_0 is None:
-            print(f"[CamCapture] Camera not found: {self.camera_path_0}")
-            return False
+    def open_single_camera(self, physical_path, role_name):
+        device = self.find_camera_by_path(physical_path)
+        if device is None:
+            print(f"[CamCapture] {role_name} camera not found: {physical_path}")
+            return None
 
-        # Match the known-good fps test script exactly: open the device path with V4L2.
-        open_target = dev_0
-        self.cap_0 = cv2.VideoCapture(open_target, cv2.CAP_V4L2)
+        capture = cv2.VideoCapture(device, cv2.CAP_V4L2)
+        if not capture.isOpened():
+            print(f"[CamCapture] Failed to open {role_name} camera with V4L2 backend: {device}")
+            capture = cv2.VideoCapture(device)
+        if not capture.isOpened():
+            print(f"[CamCapture] Failed to open {role_name} camera: {device}")
+            return None
 
-        if not self.cap_0.isOpened():
-            print(f"[CamCapture] Failed to open camera with V4L2 backend: {dev_0}")
-            self.cap_0 = cv2.VideoCapture(open_target)
-        if not self.cap_0.isOpened():
-            print(f"[CamCapture] Failed to open camera: {dev_0}")
-            return False
+        capture.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        capture.set(cv2.CAP_PROP_FPS, 60)
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-        self.cap_0.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
-        self.cap_0.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap_0.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        self.cap_0.set(cv2.CAP_PROP_FPS, 60)
-        self.cap_0.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-        self.cap_0.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap_0.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-        actual_width = int(self.cap_0.get(cv2.CAP_PROP_FRAME_WIDTH))
-        actual_height = int(self.cap_0.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        actual_fps = self.cap_0.get(cv2.CAP_PROP_FPS)
-        actual_fourcc = int(self.cap_0.get(cv2.CAP_PROP_FOURCC))
+        actual_width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH))
+        actual_height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        actual_fps = capture.get(cv2.CAP_PROP_FPS)
+        actual_fourcc = int(capture.get(cv2.CAP_PROP_FOURCC))
         actual_codec = "".join(chr((actual_fourcc >> (8 * i)) & 0xFF) for i in range(4))
 
-        print(f"[CamCapture] Camera ready: {dev_0}")
+        print(f"[CamCapture] {role_name} camera ready: {device}")
         print(
-            f"[CamCapture] Camera config: {actual_width}x{actual_height} "
+            f"[CamCapture] {role_name} camera config: {actual_width}x{actual_height} "
             f"@ {actual_fps:.2f} FPS, codec={actual_codec}"
         )
+        return capture
+
+    def open_camera(self):
+        self.lane_cap = self.open_single_camera(self.lane_camera_path, "Lane")
+        if self.lane_cap is None:
+            return False
+
+        self.task_cap = self.open_single_camera(self.task_camera_path, "Task")
+        if self.task_cap is None:
+            self.lane_cap.release()
+            self.lane_cap = None
+            return False
+
         return True
 
     def process_frame(self, frame, shm_image_array):
@@ -154,18 +168,21 @@ class CameraCapture:
         return display
 
     def run(self, stop_event):
-        window_name = "Lane Preview"
-        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+        lane_window_name = "Lane Preview"
+        task_window_name = "Task Preview"
+        cv2.namedWindow(lane_window_name, cv2.WINDOW_NORMAL)
+        cv2.namedWindow(task_window_name, cv2.WINDOW_NORMAL)
 
         frame_count = 0
         fps_timer = time.time()
         current_fps = 0.0
 
-        print("[CamCapture] Lane camera and inference loop started")
+        print("[CamCapture] Lane/task camera loop started")
         try:
             while not stop_event.is_set():
-                ret_0, frame_0 = self.cap_0.read()
-                if not ret_0:
+                lane_ok, lane_frame = self.lane_cap.read()
+                task_ok, task_frame = self.task_cap.read()
+                if not lane_ok:
                     continue
 
                 frame_count += 1
@@ -176,20 +193,28 @@ class CameraCapture:
                     frame_count = 0
                     fps_timer = time.time()
 
-                frame_0 = cv2.resize(frame_0, (640, 640), interpolation=cv2.INTER_AREA)
-                lane_infer_ret = self.run_inference(frame_0)
+                lane_frame = cv2.resize(lane_frame, (640, 640), interpolation=cv2.INTER_AREA)
+                lane_infer_ret = self.run_inference(lane_frame)
                 deviation = float(lane_infer_ret[0][0]) * 1.1
                 infer_speed = float(lane_infer_ret[0][1])
 
                 ret_bytes = struct.pack("=ff", deviation, infer_speed)
                 self.shm_lane_ret_bytes.buf[0:len(ret_bytes)] = ret_bytes
                 self.process_frame(
-                    frame_0,
-                    np.ndarray(frame_0.shape, dtype=frame_0.dtype, buffer=self.shm_image_0.buf),
+                    lane_frame,
+                    np.ndarray(lane_frame.shape, dtype=lane_frame.dtype, buffer=self.shm_lane_image.buf),
                 )
 
-                preview = self.draw_overlay(frame_0, deviation, infer_speed, current_fps)
-                cv2.imshow(window_name, preview)
+                if task_ok:
+                    task_frame = cv2.resize(task_frame, (640, 640), interpolation=cv2.INTER_AREA)
+                    self.process_frame(
+                        task_frame,
+                        np.ndarray(task_frame.shape, dtype=task_frame.dtype, buffer=self.shm_task_image.buf),
+                    )
+                    cv2.imshow(task_window_name, task_frame)
+
+                lane_preview = self.draw_overlay(lane_frame, deviation, infer_speed, current_fps)
+                cv2.imshow(lane_window_name, lane_preview)
                 key = cv2.waitKey(1) & 0xFF
                 if key == ord("q"):
                     print("[CamCapture] q pressed, stopping framework")
@@ -197,14 +222,31 @@ class CameraCapture:
                     break
         finally:
             print("[CamCapture] Stopping camera process")
-            if self.cap_0 is not None:
-                self.cap_0.release()
+            if self.lane_cap is not None:
+                self.lane_cap.release()
+            if self.task_cap is not None:
+                self.task_cap.release()
             cv2.destroyAllWindows()
 
 
-def vidpub_course(stop_event, shm0, shm_lane, model_path="src/cnn_auto.nb", camera_path="1-2.2:1.0"):
-    camera_capture = CameraCapture(camera_path_0=camera_path)
-    camera_capture.setup_shared_memory(shm_img_name=shm0, shm_lane_name=shm_lane)
+def vidpub_course(
+    stop_event,
+    lane_shm_key,
+    task_shm_key,
+    shm_lane_key,
+    model_path="src/cnn_auto.nb",
+    lane_camera_path="1-2.2:1.0",
+    task_camera_path="1-2.4:1.0",
+):
+    camera_capture = CameraCapture(
+        lane_camera_path=lane_camera_path,
+        task_camera_path=task_camera_path,
+    )
+    camera_capture.setup_shared_memory(
+        lane_shm_name=lane_shm_key,
+        task_shm_name=task_shm_key,
+        shm_lane_name=shm_lane_key,
+    )
 
     try:
         camera_capture.setup_paddle_predictor(model_path=model_path)

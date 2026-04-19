@@ -1,4 +1,10 @@
+import time
+
+import numpy as np
+
+from box_pid import BoxPidAligner
 from shared_memory_manager import SharedMemoryManager
+from tool_func import get_only_box
 
 
 class Base_func:
@@ -44,6 +50,10 @@ class Base_func:
         if self.request_queue is not None:
             self.request_queue.put(data)
 
+    def send_motion_command(self, data):
+        if self.request_queue is not None:
+            self.request_queue.put(data)
+
     def execute_arm_motion(self, mot0, mot1, mot2, mot3, suck=0, light=0):
         data = {
             "cmd": "Arm",
@@ -68,9 +78,18 @@ class Base_func:
 class Task_func:
     """Placeholder task library. Task2 now demonstrates the OCR call chain."""
 
-    def __init__(self, base_func: Base_func, ocr_reader=None):
+    def __init__(
+        self,
+        base_func: Base_func,
+        ocr_reader=None,
+        task_shm_key="shm_task",
+        task_client=None,
+    ):
         self.base = base_func
         self.ocr_reader = ocr_reader
+        self.task_shm_key = task_shm_key
+        self.task_client = task_client
+        self.tracking_aligner = BoxPidAligner(params="Fast")
 
     def task1_executor(self):
         print("[Task_func] Executing Task 1 placeholder...")
@@ -82,7 +101,7 @@ class Task_func:
             return
 
         texts = self.ocr_reader.read_texts(
-            shm_key="shm_0",
+            shm_key=self.task_shm_key,
             shape=(640, 640, 3),
             result_amount=1,
             sort_by="y",
@@ -97,3 +116,52 @@ class Task_func:
 
     def task4_executor(self):
         print("[Task_func] Executing Task 4 placeholder...")
+
+    def tracking_executor(self, target_pose=(320, 240), cam_pose="L", timeout_s=5.0):
+        if self.task_client is None:
+            print("[Task_func] Tracking client is not configured.")
+            self.base.MOD_STOP()
+            return False
+
+        self.tracking_aligner.reset()
+        start_time = time.time()
+
+        while True:
+            if timeout_s is not None and time.time() - start_time > timeout_s:
+                self.tracking_aligner.reset()
+                self.base.MOD_STOP()
+                print("[Tracking] Timeout")
+                return False
+
+            detections = self.task_client(self.task_shm_key, (640, 640, 3), np.uint8)
+            target_box = get_only_box(detections)
+            if target_box is None or getattr(target_box, "center", None) is None:
+                self.tracking_aligner.reset()
+                self.base.MOD_STOP()
+                print("[Tracking] No target box.")
+                return False
+
+            aligned, motion, debug = self.tracking_aligner.update(
+                target_box.center,
+                target_pose=target_pose,
+                cam_pose=cam_pose,
+            )
+            self.base.send_motion_command(motion)
+
+            x_err = debug["x_err"]
+            y_err = debug["y_err"]
+            x_text = "skip" if x_err is None else f"{x_err:.2f}"
+            y_text = "skip" if y_err is None else f"{y_err:.2f}"
+
+            if aligned:
+                self.base.MOD_STOP()
+                self.tracking_aligner.reset()
+                print("[Tracking] Location OK")
+                return True
+
+            print(
+                "[Tracking] "
+                f"center={target_box.center} "
+                f"x_err={x_text} y_err={y_text}"
+            )
+            time.sleep(0.02)

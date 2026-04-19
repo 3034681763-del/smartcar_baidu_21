@@ -10,7 +10,8 @@ from infer_server_client import model_configs, serve_model_process
 from shared_memory_manager import SharedMemoryManager
 
 SERIAL_PHYSICAL_PATH = "2.2:1.0"
-CAMERA_DEVICE = "/dev/video0"
+LANE_CAMERA_DEVICE = "/dev/video0"
+TASK_CAMERA_DEVICE = "/dev/video1"
 LANE_MODEL_PATH = "/home/jetson/workspace_plus/vehicle_wbt_21th_lane/src/cnn_auto.nb"
 ENABLE_AUX_MODELS = True
 
@@ -22,6 +23,7 @@ def start_framework():
 
     shm_manager = SharedMemoryManager()
     shm_manager.create_block("shm_0", size=640 * 640 * 3)
+    shm_manager.create_block("shm_task", size=640 * 640 * 3)
     shm_manager.create_block("shm_lane", size=8)
     shm_manager.create_block("shm_crop", size=640 * 640 * 3)
     request_queue = multiprocessing.Queue()
@@ -35,10 +37,10 @@ def start_framework():
         args=(SERIAL_PHYSICAL_PATH, 115200, request_queue, publish_queue),
     )
 
-    print("[Main] Starting lane camera process...")
+    print("[Main] Starting lane/task camera process...")
     mgr.add_process(
         target=vidpub_course,
-        args=("shm_0", "shm_lane", LANE_MODEL_PATH, CAMERA_DEVICE),
+        args=("shm_0", "shm_task", "shm_lane", LANE_MODEL_PATH, LANE_CAMERA_DEVICE, TASK_CAMERA_DEVICE),
     )
 
     if ENABLE_AUX_MODELS:
@@ -57,6 +59,7 @@ def start_framework():
         request_queue=request_queue,
         publish_queue=publish_queue,
         enable_aux_models=ENABLE_AUX_MODELS,
+        task_shm_key="shm_task",
     )
     brain.start()
 

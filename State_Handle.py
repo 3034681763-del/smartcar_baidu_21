@@ -14,13 +14,20 @@ class TaskManager:
     Main state machine with a judge thread and a handler thread.
     """
 
-    def __init__(self, request_queue=None, publish_queue=None, enable_aux_models=True):
+    def __init__(
+        self,
+        request_queue=None,
+        publish_queue=None,
+        enable_aux_models=True,
+        task_shm_key="shm_task",
+    ):
         self.movebase = Base_func(request_queue=request_queue)
 
         self.current_task = "Lane"
         self.stopJudge = threading.Event()
         self.stopHandle = threading.Event()
         self.publish_queue = publish_queue
+        self.task_shm_key = task_shm_key
         self.fache = 0
         self.cheat_flag = 0
         self.tofL = 5000
@@ -30,6 +37,7 @@ class TaskManager:
 
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_0", size=640 * 640 * 3)
+        self.shm_manager.create_block(self.task_shm_key, size=640 * 640 * 3)
         self.shm_manager.create_block("shm_lane", size=8)
         self.shm_manager.create_block("shm_crop", size=640 * 640 * 3)
 
@@ -55,14 +63,19 @@ class TaskManager:
 
         from move_base import Task_func
 
-        self.task_func = Task_func(self.movebase, self.ocr_reader)
+        self.task_func = Task_func(
+            self.movebase,
+            self.ocr_reader,
+            task_shm_key=self.task_shm_key,
+            task_client=self.task_client,
+        )
         self.current_sensor_data = {}
 
     def read_text_once(self, result_amount=1, sort_by="y"):
         if self.ocr_reader is None:
             return []
         return self.ocr_reader.read_texts(
-            shm_key="shm_0",
+            shm_key=self.task_shm_key,
             shape=(640, 640, 3),
             dtype=np.uint8,
             target_label="text",
@@ -107,8 +120,11 @@ class TaskManager:
         while not self.stopHandle.is_set():
             time.sleep(0.05)
             task = self.current_task
-            if task == "Lane":
+            task_key = task.lower() if isinstance(task, str) else ""
+            if task_key == "lane":
                 self.movebase.MOD_LANE(base_speed=-0.28)
+            elif task_key == "tracking":
+                self.task_func.tracking_executor()
             elif task == "Task1":
                 self.task_func.task1_executor()
                 self.current_task = "Lane"
