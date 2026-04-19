@@ -41,6 +41,11 @@ def build_parser():
         default=0.1,
         help="Loop send interval in seconds when --loop is enabled",
     )
+    parser.add_argument(
+        "--print-all",
+        action="store_true",
+        help="Print every received payload instead of only changed payloads",
+    )
     return parser
 
 
@@ -100,7 +105,7 @@ def main():
                     next_send_time = now + max(args.interval, 0.01)
 
             payload = uart.last_response
-            if payload and payload != last_payload:
+            if payload and (args.print_all or payload != last_payload):
                 print(f"[serial_test] RX -> {payload}")
                 last_payload = dict(payload)
             time.sleep(0.02)
