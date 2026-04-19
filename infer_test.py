@@ -6,11 +6,7 @@ import time
 
 import cv2
 
-
-def parse_device(device_arg):
-    if isinstance(device_arg, str) and device_arg.isdigit():
-        return int(device_arg)
-    return device_arg
+from camera_device_utils import open_camera_from_device_arg
 
 
 def ensure_paddle_jetson_importable(optional_path=""):
@@ -33,7 +29,11 @@ def build_parser():
     parser = argparse.ArgumentParser(
         description="Standalone task detection preview test."
     )
-    parser.add_argument("--device", default="0", help="Camera device index or path")
+    parser.add_argument(
+        "--device",
+        default="1-2.1:1.0",
+        help="Camera device path, /dev/videoX, or physical path like 1-2.1:1.0",
+    )
     parser.add_argument("--width", type=int, default=640, help="Capture width")
     parser.add_argument("--height", type=int, default=480, help="Capture height")
     parser.add_argument("--fps", type=int, default=60, help="Capture FPS")
@@ -55,22 +55,20 @@ def main():
     YoloeInfer = ensure_paddle_jetson_importable(args.paddle_jetson_path)
     detector = YoloeInfer(args.model)
 
-    device = parse_device(args.device)
-    cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
-    if not cap.isOpened():
-        cap = cv2.VideoCapture(device)
-    if not cap.isOpened():
-        raise RuntimeError(f"Failed to open camera: {args.device}")
-
-    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*args.codec))
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
-    cap.set(cv2.CAP_PROP_FPS, args.fps)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    cap, actual_device, candidates = open_camera_from_device_arg(
+        args.device,
+        width=args.width,
+        height=args.height,
+        fps=args.fps,
+        codec=args.codec,
+        role_name="Infer",
+    )
 
     print("=" * 60)
     print("Infer Test")
-    print(f"Device: {args.device}")
+    print(f"Path:   {args.device}")
+    print(f"Nodes:  {candidates}")
+    print(f"Using:  {actual_device}")
     print(f"Model:  {args.model}")
     print("Quit:   press q")
     print("=" * 60)

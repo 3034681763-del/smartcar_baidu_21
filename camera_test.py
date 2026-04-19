@@ -4,38 +4,22 @@ import time
 
 import cv2
 
-
-def parse_device(device_arg):
-    if isinstance(device_arg, str) and device_arg.isdigit():
-        return int(device_arg)
-    return device_arg
-
-
-def open_camera(device_arg, width, height, fps, codec):
-    device = parse_device(device_arg)
-    cap = cv2.VideoCapture(device, cv2.CAP_V4L2)
-    if not cap.isOpened():
-        cap = cv2.VideoCapture(device)
-    if not cap.isOpened():
-        raise RuntimeError(f"Failed to open camera: {device_arg}")
-
-    cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*codec))
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-    cap.set(cv2.CAP_PROP_FPS, fps)
-    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
-    return cap
+from camera_device_utils import open_camera_from_device_arg
 
 
 def build_parser():
     parser = argparse.ArgumentParser(
         description="Standalone camera preview test. Supports one or two cameras."
     )
-    parser.add_argument("--lane-device", default="0", help="Lane camera device index or path")
+    parser.add_argument(
+        "--lane-device",
+        default="1-2.3:1.0",
+        help="Lane camera device path, /dev/videoX, or physical path like 1-2.3:1.0",
+    )
     parser.add_argument(
         "--task-device",
-        default="",
-        help="Optional task camera device index or path",
+        default="1-2.1:1.0",
+        help="Optional task camera device path, /dev/videoX, or physical path like 1-2.1:1.0",
     )
     parser.add_argument("--width", type=int, default=640, help="Requested capture width")
     parser.add_argument("--height", type=int, default=480, help="Requested capture height")
@@ -49,16 +33,36 @@ def main():
     if len(args.codec) != 4:
         raise ValueError("FOURCC codec must be exactly 4 characters")
 
-    lane_cap = open_camera(args.lane_device, args.width, args.height, args.fps, args.codec)
+    lane_cap, lane_device, lane_candidates = open_camera_from_device_arg(
+        args.lane_device,
+        width=args.width,
+        height=args.height,
+        fps=args.fps,
+        codec=args.codec,
+        role_name="Lane",
+    )
     task_cap = None
+    task_device = None
+    task_candidates = []
     if args.task_device:
-        task_cap = open_camera(args.task_device, args.width, args.height, args.fps, args.codec)
+        task_cap, task_device, task_candidates = open_camera_from_device_arg(
+            args.task_device,
+            width=args.width,
+            height=args.height,
+            fps=args.fps,
+            codec=args.codec,
+            role_name="Task",
+        )
 
     print("=" * 60)
     print("Camera Test")
-    print(f"Lane device: {args.lane_device}")
+    print(f"Lane path:   {args.lane_device}")
+    print(f"Lane nodes:  {lane_candidates}")
+    print(f"Lane using:  {lane_device}")
     if args.task_device:
-        print(f"Task device: {args.task_device}")
+        print(f"Task path:   {args.task_device}")
+        print(f"Task nodes:  {task_candidates}")
+        print(f"Task using:  {task_device}")
     print(f"Resolution:  {args.width}x{args.height}")
     print(f"FPS request: {args.fps}")
     print("Quit:        press q in any preview window")

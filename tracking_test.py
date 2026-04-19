@@ -18,8 +18,16 @@ def build_parser():
     parser = argparse.ArgumentParser(
         description="Standalone tracking mode test."
     )
-    parser.add_argument("--lane-device", default="/dev/video0", help="Lane camera device")
-    parser.add_argument("--task-device", default="/dev/video1", help="Task camera device")
+    parser.add_argument(
+        "--lane-device",
+        default="1-2.3:1.0",
+        help="Lane camera device path, /dev/videoX, or physical path like 1-2.3:1.0",
+    )
+    parser.add_argument(
+        "--task-device",
+        default="1-2.1:1.0",
+        help="Task camera device path, /dev/videoX, or physical path like 1-2.1:1.0",
+    )
     parser.add_argument(
         "--lane-model",
         default="/home/jetson/workspace_plus/vehicle_wbt_21th_lane/src/cnn_auto.nb",
