@@ -2,11 +2,13 @@
 import argparse
 import multiprocessing
 import time
+from multiprocessing import shared_memory
 from queue import Queue
 
+import cv2
 import numpy as np
 
-from Cam_cap import vidpub_course
+from camera_device_utils import open_camera_from_device_arg
 from Process_manage import ProcessManager
 from SerialCommunicate import SerialServer
 from infer_server_client import InferClient1, model_configs, serve_model_process
@@ -16,22 +18,12 @@ from shared_memory_manager import SharedMemoryManager
 
 def build_parser():
     parser = argparse.ArgumentParser(
-        description="Standalone tracking mode test."
-    )
-    parser.add_argument(
-        "--lane-device",
-        default="1-2.3:1.0",
-        help="Lane camera device path, /dev/videoX, or physical path like 1-2.3:1.0",
+        description="Standalone tracking mode test driven only by the task camera."
     )
     parser.add_argument(
         "--task-device",
-        default="1-2.1:1.0",
-        help="Task camera device path, /dev/videoX, or physical path like 1-2.1:1.0",
-    )
-    parser.add_argument(
-        "--lane-model",
-        default="/home/jetson/workspace_plus/vehicle_wbt_21th_lane/src/cnn_auto.nb",
-        help="Lane model path used by Cam_cap",
+        default="2.1:1.0",
+        help="Task camera device path, /dev/videoX, or physical path like 2.1:1.0",
     )
     parser.add_argument(
         "--physical-path",
@@ -46,14 +38,54 @@ def build_parser():
     return parser
 
 
+def publish_task_camera_only(stop_event, task_shm_key, task_device, width=640, height=480, fps=60, codec="MJPG"):
+    task_cap = None
+    task_shm = None
+    window_name = "Task Preview"
+    try:
+        task_cap, actual_device, candidates = open_camera_from_device_arg(
+            task_device,
+            width=width,
+            height=height,
+            fps=fps,
+            codec=codec,
+            role_name="Task",
+        )
+        print(f"[tracking_test] Task path:  {task_device}")
+        print(f"[tracking_test] Task nodes: {candidates}")
+        print(f"[tracking_test] Task using: {actual_device}")
+
+        task_shm = shared_memory.SharedMemory(name=task_shm_key)
+        cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+
+        while not stop_event.is_set():
+            ok, frame = task_cap.read()
+            if not ok:
+                continue
+
+            frame = cv2.resize(frame, (640, 640), interpolation=cv2.INTER_AREA)
+            shm_array = np.ndarray(frame.shape, dtype=frame.dtype, buffer=task_shm.buf)
+            shm_array[:] = frame[:]
+
+            cv2.imshow(window_name, frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                print("[tracking_test] q pressed, stopping task camera publisher")
+                stop_event.set()
+                break
+    finally:
+        if task_cap is not None:
+            task_cap.release()
+        if task_shm is not None:
+            task_shm.close()
+        cv2.destroyAllWindows()
+
+
 def main():
     args = build_parser().parse_args()
     multiprocessing.freeze_support()
 
     shm_manager = SharedMemoryManager()
-    shm_manager.create_block("shm_0", size=640 * 640 * 3)
     shm_manager.create_block("shm_task", size=640 * 640 * 3)
-    shm_manager.create_block("shm_lane", size=8)
     shm_manager.create_block("shm_crop", size=640 * 640 * 3)
 
     request_queue = Queue()
@@ -69,13 +101,9 @@ def main():
 
     manager = ProcessManager()
     manager.add_process(
-        target=vidpub_course,
+        target=publish_task_camera_only,
         args=(
-            "shm_0",
             "shm_task",
-            "shm_lane",
-            args.lane_model,
-            args.lane_device,
             args.task_device,
         ),
     )
@@ -92,7 +120,6 @@ def main():
 
         print("=" * 60)
         print("Tracking Test")
-        print(f"Lane camera: {args.lane_device}")
         print(f"Task camera: {args.task_device}")
         print(f"Target pose: ({args.target_x}, {args.target_y})")
         print(f"cam_pose:    {args.cam_pose}")
