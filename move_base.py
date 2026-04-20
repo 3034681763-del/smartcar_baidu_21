@@ -11,14 +11,19 @@ from tool_func import get_only_box
 class Base_func:
     """Base control bridge for chassis and actuator commands."""
 
-    def __init__(self, mode="normal", request_queue=None, base_file="motion.json"):
+    def __init__(self, mode="normal", request_queue=None, base_file="motion.json", use_lane_shm=True):
         self.mode = mode
         self.request_queue = request_queue
         self.shm_manager = SharedMemoryManager()
-        self.shm_manager.create_block("shm_lane", size=8)
+        self.use_lane_shm = use_lane_shm
+        if self.use_lane_shm:
+            self.shm_manager.create_block("shm_lane", size=8)
         self.base_actions = load_params(filename=base_file).get("BASE_MOTION", {})
 
     def MOD_LANE(self, base_speed=-0.28):
+        if not self.use_lane_shm:
+            print("[MoveBase] Lane shared memory is disabled in this mode.")
+            return
         try:
             angle, infer_speed = self.shm_manager.read_floats("shm_lane", 2)
             del infer_speed

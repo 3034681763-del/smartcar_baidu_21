@@ -139,7 +139,6 @@ def main():
 
     shm_manager = SharedMemoryManager()
     shm_manager.create_block("shm_task", size=640 * 640 * 3)
-    shm_manager.create_block("shm_crop", size=640 * 640 * 3)
 
     request_queue = Queue()
     publish_queue = Queue()
@@ -170,7 +169,7 @@ def main():
     try:
         task_cfg = next(cfg for cfg in model_configs if cfg["name"] == "task")
         task_client = InferClient1("task", shm_manager, task_cfg["port"])
-        base = Base_func(request_queue=request_queue)
+        base = Base_func(request_queue=request_queue, use_lane_shm=False)
         task = Task_func(base, ocr_reader=None, task_shm_key="shm_task", task_client=task_client)
 
         def update_overlay(status, target_box, debug, missed_frames):
