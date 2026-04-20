@@ -155,7 +155,14 @@ class Task_func:
         print("[Task_func] Base motion group test finished.")
         return True
 
-    def tracking_executor(self, target_pose=(320, 240), cam_pose="L", timeout_s=5.0):
+    def tracking_executor(
+        self,
+        target_pose=(320, 240),
+        cam_pose="L",
+        timeout_s=5.0,
+        max_missed_frames=5,
+        debug_hook=None,
+    ):
         if self.task_client is None:
             print("[Task_func] Tracking client is not configured.")
             self.base.MOD_STOP()
@@ -163,9 +170,12 @@ class Task_func:
 
         self.tracking_aligner.reset()
         start_time = time.time()
+        missed_frames = 0
 
         while True:
             if timeout_s is not None and time.time() - start_time > timeout_s:
+                if callable(debug_hook):
+                    debug_hook(status="timeout", target_box=None, debug=None, missed_frames=missed_frames)
                 self.tracking_aligner.reset()
                 self.base.MOD_STOP()
                 print("[Tracking] Timeout")
@@ -174,16 +184,36 @@ class Task_func:
             detections = self.task_client(self.task_shm_key, (640, 640, 3), np.uint8)
             target_box = get_only_box(detections)
             if target_box is None or getattr(target_box, "center", None) is None:
-                self.tracking_aligner.reset()
-                self.base.MOD_STOP()
-                print("[Tracking] No target box.")
-                return False
+                missed_frames += 1
+                if callable(debug_hook):
+                    debug_hook(
+                        status="missing",
+                        target_box=None,
+                        debug=None,
+                        missed_frames=missed_frames,
+                    )
+                if missed_frames >= max_missed_frames:
+                    self.tracking_aligner.reset()
+                    self.base.MOD_STOP()
+                    print(f"[Tracking] No target box for {missed_frames} frames.")
+                    return False
+                time.sleep(0.02)
+                continue
+
+            missed_frames = 0
 
             aligned, motion, debug = self.tracking_aligner.update(
                 target_box.center,
                 target_pose=target_pose,
                 cam_pose=cam_pose,
             )
+            if callable(debug_hook):
+                debug_hook(
+                    status="tracking",
+                    target_box=target_box,
+                    debug=debug,
+                    missed_frames=missed_frames,
+                )
             self.base.send_motion_command(motion)
 
             x_err = debug["x_err"]
@@ -192,6 +222,13 @@ class Task_func:
             y_text = "skip" if y_err is None else f"{y_err:.2f}"
 
             if aligned:
+                if callable(debug_hook):
+                    debug_hook(
+                        status="aligned",
+                        target_box=target_box,
+                        debug=debug,
+                        missed_frames=missed_frames,
+                    )
                 self.base.MOD_STOP()
                 self.tracking_aligner.reset()
                 print("[Tracking] Location OK")

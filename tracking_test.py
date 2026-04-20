@@ -35,10 +35,25 @@ def build_parser():
     parser.add_argument("--target-y", type=float, default=240.0, help="Tracking target y")
     parser.add_argument("--cam-pose", default="L", choices=["L", "R", "shoot"], help="Tracking pose")
     parser.add_argument("--timeout", type=float, default=5.0, help="Tracking timeout")
+    parser.add_argument(
+        "--max-missed-frames",
+        type=int,
+        default=5,
+        help="Tracking stops only after this many consecutive missing frames",
+    )
     return parser
 
 
-def publish_task_camera_only(stop_event, task_shm_key, task_device, width=640, height=480, fps=60, codec="MJPG"):
+def publish_task_camera_only(
+    stop_event,
+    task_shm_key,
+    task_device,
+    overlay_state,
+    width=640,
+    height=480,
+    fps=60,
+    codec="MJPG",
+):
     task_cap = None
     task_shm = None
     window_name = "Task Preview"
@@ -67,7 +82,45 @@ def publish_task_camera_only(stop_event, task_shm_key, task_device, width=640, h
             shm_array = np.ndarray(frame.shape, dtype=frame.dtype, buffer=task_shm.buf)
             shm_array[:] = frame[:]
 
-            cv2.imshow(window_name, frame)
+            display = frame.copy()
+            cv2.drawMarker(
+                display,
+                (320, 240),
+                (0, 255, 255),
+                markerType=cv2.MARKER_CROSS,
+                markerSize=20,
+                thickness=2,
+            )
+
+            if overlay_state[0] > 0.5:
+                x1, y1, x2, y2 = map(int, overlay_state[1:5])
+                cx, cy = map(int, overlay_state[5:7])
+                cv2.rectangle(display, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.circle(display, (cx, cy), 5, (0, 255, 255), -1)
+                cv2.putText(
+                    display,
+                    "Tracking Box",
+                    (x1, max(24, y1 - 8)),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 255, 0),
+                    2,
+                    cv2.LINE_AA,
+                )
+
+            missed_frames = int(overlay_state[7])
+            cv2.putText(
+                display,
+                f"Missed: {missed_frames}",
+                (12, 28),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (255, 200, 0),
+                2,
+                cv2.LINE_AA,
+            )
+
+            cv2.imshow(window_name, display)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 print("[tracking_test] q pressed, stopping task camera publisher")
                 stop_event.set()
@@ -90,6 +143,7 @@ def main():
 
     request_queue = Queue()
     publish_queue = Queue()
+    overlay_state = multiprocessing.Array("d", 8, lock=True)
 
     serial_server = SerialServer(
         serial_path=args.physical_path,
@@ -105,6 +159,7 @@ def main():
         args=(
             "shm_task",
             args.task_device,
+            overlay_state,
         ),
     )
     for cfg in model_configs:
@@ -118,12 +173,30 @@ def main():
         base = Base_func(request_queue=request_queue)
         task = Task_func(base, ocr_reader=None, task_shm_key="shm_task", task_client=task_client)
 
+        def update_overlay(status, target_box, debug, missed_frames):
+            with overlay_state.get_lock():
+                overlay_state[7] = float(missed_frames)
+                if target_box is None or getattr(target_box, "bbox", None) is None:
+                    overlay_state[0] = 0.0
+                    return
+
+                x1, y1, x2, y2 = target_box.bbox
+                cx, cy = target_box.center
+                overlay_state[0] = 1.0
+                overlay_state[1] = float(x1)
+                overlay_state[2] = float(y1)
+                overlay_state[3] = float(x2)
+                overlay_state[4] = float(y2)
+                overlay_state[5] = float(cx)
+                overlay_state[6] = float(cy)
+
         print("=" * 60)
         print("Tracking Test")
         print(f"Task camera: {args.task_device}")
         print(f"Target pose: ({args.target_x}, {args.target_y})")
         print(f"cam_pose:    {args.cam_pose}")
         print(f"timeout:     {args.timeout:.2f}s")
+        print(f"missed max:  {args.max_missed_frames}")
         print("=" * 60)
         time.sleep(1.0)
 
@@ -131,6 +204,8 @@ def main():
             target_pose=(args.target_x, args.target_y),
             cam_pose=args.cam_pose,
             timeout_s=args.timeout,
+            max_missed_frames=args.max_missed_frames,
+            debug_hook=update_overlay,
         )
         print(f"[tracking_test] result={result}")
         return 0 if result else 1
