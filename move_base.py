@@ -131,14 +131,19 @@ class Task_func:
         self.task_shm_key = task_shm_key
         self.task_client = task_client
         self.tracking_aligner = BoxPidAligner(params="Fast")
+        self.task_shm = SharedMemoryManager()
+        self.task_shm.create_block(task_shm_key, size=640 * 640 * 3)
         task_cfg = load_params("motion.json").get("TASK_CONFIG", {})
         self.seeding_cfg = task_cfg.get("SEEDING", {})
 
     def task1_executor(self):
+        return self.seeding_executor()
+
+    def seeding_executor(self):
         return self.Hanoi_Tower()
 
     def Hanoi_Tower(self):
-        print("[Task_func] Executing Task 1 seeding task...")
+        print("[Task_func] Executing Seeding task...")
         if self.task_client is None:
             print("[Task_func] Task model client is not configured.")
             return False
@@ -149,52 +154,93 @@ class Task_func:
         sort_reverse = bool(cfg.get("sort_reverse", False))
         ready_timeout = float(cfg.get("ready_timeout_s", 6.0))
         ready_confirm_frames = int(cfg.get("ready_confirm_frames", 3))
+        ready_min_area = float(cfg.get("ready_min_area", 0.0))
+        ready_edge_margin = int(cfg.get("ready_edge_margin", 5))
+        ready_frame_width = int(cfg.get("ready_frame_width", 640))
+        ready_frame_height = int(cfg.get("ready_frame_height", 640))
         layout_timeout = float(cfg.get("layout_timeout_s", 6.0))
         layout_confirm_frames = int(cfg.get("layout_confirm_frames", 2))
+        layout_min_score = float(cfg.get("layout_min_score", 0.5))
+        use_color_assist = bool(cfg.get("use_color_assist", True))
+        color_patch_radius = int(cfg.get("color_patch_radius", 12))
         track_timeout = float(cfg.get("track_timeout_s", 5.0))
         max_missed_frames = int(cfg.get("max_missed_frames", 8))
+        recover_pause_s = float(cfg.get("tracking_recover_pause_s", 0.06))
+        recover_timeout_s = float(cfg.get("tracking_recover_timeout_s", 0.5))
+        tracking_retry_count = int(cfg.get("tracking_retry_count", 2))
+        seed_phase_timeout = float(cfg.get("seed_phase_timeout_s", 12.0))
         cam_pose = cfg.get("cam_pose", "L")
-        search_action = cfg.get("search_action", "moveshort")
+        search_actions = list(cfg.get("search_actions", []))
+        if not search_actions:
+            fallback_search_action = cfg.get("search_action", "moveshort")
+            search_actions = [fallback_search_action]
         search_countdown = float(cfg.get("search_countdown", 0.15))
         search_max_steps = int(cfg.get("search_max_steps", 8))
         pickup_targets = cfg.get("pickup_target_pose", {})
         return_action_name = cfg.get("return_action", "SeedReturnLane")
+        abort_action_name = cfg.get("abort_action", None)
+        abort_countdown = float(cfg.get("abort_countdown", search_countdown))
 
         ready_count = 0
         ready_start = time.time()
         search_steps = 0
+        search_index = 0
         while time.time() - ready_start < ready_timeout:
             detections = self.task_client(self.task_shm_key, (640, 640, 3), np.uint8)
-            if has_all_seed_targets(detections, label_aliases=label_aliases):
+            ready_state = has_all_seed_targets(
+                detections,
+                label_aliases=label_aliases,
+                min_area=ready_min_area,
+                edge_margin=ready_edge_margin,
+                frame_width=ready_frame_width,
+                frame_height=ready_frame_height,
+                return_details=True,
+            )
+            if ready_state.get("ready", False):
                 ready_count += 1
+                print(f"[Task_func] Seed ready stable: {ready_count}/{ready_confirm_frames}")
                 if ready_count >= ready_confirm_frames:
                     break
             else:
                 ready_count = 0
+                missing_reason = self._describe_seed_ready_issue(ready_state)
+                print(f"[Task_func] Seed ready wait: {missing_reason}")
                 if search_steps < search_max_steps:
-                    self.base.execute_base_motion(search_action, countdown=search_countdown)
+                    search_index = self._run_search_action(search_actions, search_index, search_countdown)
                     search_steps += 1
             time.sleep(0.05)
 
         if ready_count < ready_confirm_frames:
-            print("[Task_func] Seed targets were not all ready within timeout.")
-            return False
+            return self._task_fail(
+                "Seed targets were not all ready within timeout.",
+                abort_action_name,
+                abort_countdown,
+            )
 
         layout = None
         layout_count = 0
         last_signature = None
         start_time = time.time()
+        search_steps = 0
         while time.time() - start_time < layout_timeout:
             detections = self.task_client(self.task_shm_key, (640, 640, 3), np.uint8)
+            frame = self._read_task_frame()
             layout = judge_seed_layout(
                 detections,
+                image=frame,
                 label_aliases=label_aliases,
                 drop_slot_map=drop_slot_map,
                 sort_reverse=sort_reverse,
+                min_score=layout_min_score,
+                use_color_assist=use_color_assist,
+                color_patch_radius=color_patch_radius,
             )
             if layout is None:
                 layout_count = 0
                 last_signature = None
+                if search_steps < search_max_steps:
+                    search_index = self._run_search_action(search_actions, search_index, search_countdown)
+                    search_steps += 1
             else:
                 signature = layout["signature"]
                 if signature == last_signature:
@@ -202,34 +248,66 @@ class Task_func:
                 else:
                     last_signature = signature
                     layout_count = 1
+                print(
+                    f"[Task_func] Layout candidate {layout['slot_map']} "
+                    f"({layout['source']}), stable {layout_count}/{layout_confirm_frames}"
+                )
                 if layout_count >= layout_confirm_frames:
                     break
             time.sleep(0.05)
 
         if layout is None or layout_count < layout_confirm_frames:
-            print("[Task_func] Failed to build seeding layout within timeout.")
-            return False
+            return self._task_fail(
+                "Failed to build seeding layout within timeout.",
+                abort_action_name,
+                abort_countdown,
+            )
 
         print(f"[Task_func] Seeding layout: {layout['slot_map']}")
 
         seed_order = ("large", "medium", "small")
         for index, seed_key in enumerate(seed_order):
+            seed_phase_start = time.time()
             pickup_pose = tuple(pickup_targets.get(seed_key, [320, 260]))
-            if not self.tracking_executor(
-                target_pose=pickup_pose,
-                cam_pose=cam_pose,
-                timeout_s=track_timeout,
-                max_missed_frames=max_missed_frames,
-                selector=get_seed_box,
-                selector_kwargs={"size_key": seed_key, "label_aliases": label_aliases},
-            ):
-                print(f"[Task_func] Failed to align with {seed_key} seed.")
-                return False
+            aligned = False
+            align_attempt = 0
+            while align_attempt <= tracking_retry_count and time.time() - seed_phase_start < seed_phase_timeout:
+                print(
+                    f"[Task_func] Align {seed_key} seed, "
+                    f"attempt {align_attempt + 1}/{tracking_retry_count + 1}"
+                )
+                aligned = self.tracking_executor(
+                    target_pose=pickup_pose,
+                    cam_pose=cam_pose,
+                    timeout_s=track_timeout,
+                    max_missed_frames=max_missed_frames,
+                    recover_pause_s=recover_pause_s,
+                    recover_timeout_s=recover_timeout_s,
+                    selector=get_seed_box,
+                    selector_kwargs={"size_key": seed_key, "label_aliases": label_aliases},
+                )
+                if aligned:
+                    break
+                align_attempt += 1
+                if align_attempt <= tracking_retry_count:
+                    search_index = self._run_search_action(search_actions, search_index, search_countdown)
+
+            if not aligned:
+                return self._task_fail(
+                    f"Failed to align with {seed_key} seed.",
+                    abort_action_name,
+                    abort_countdown,
+                )
 
             self._seed_grab(seed_key)
 
             move_action = layout["transport_map"][seed_key]["go_action"]
-            self.base.execute_base_motion(move_action, countdown=search_countdown)
+            if not self.base.execute_base_motion(move_action, countdown=search_countdown):
+                return self._task_fail(
+                    f"Base action missing: {move_action}",
+                    abort_action_name,
+                    abort_countdown,
+                )
             self._seed_place(seed_key, layout["transport_map"][seed_key]["drop_slot"])
 
             if index < len(seed_order) - 1:
@@ -237,11 +315,28 @@ class Task_func:
                 current_drop_slot = layout["transport_map"][seed_key]["drop_slot"].upper()
                 next_pick_slot = layout["transport_map"][next_seed]["pick_slot"]
                 back_action = f"Seed{current_drop_slot}To{next_pick_slot}"
-                self.base.execute_base_motion(back_action, countdown=search_countdown)
+                if not self.base.execute_base_motion(back_action, countdown=search_countdown):
+                    return self._task_fail(
+                        f"Base action missing: {back_action}",
+                        abort_action_name,
+                        abort_countdown,
+                    )
 
-        self.base.execute_base_motion(return_action_name, countdown=search_countdown)
+            if time.time() - seed_phase_start >= seed_phase_timeout:
+                return self._task_fail(
+                    f"Seed phase timeout for {seed_key}.",
+                    abort_action_name,
+                    abort_countdown,
+                )
+
+        if not self.base.execute_base_motion(return_action_name, countdown=search_countdown):
+            return self._task_fail(
+                f"Base action missing: {return_action_name}",
+                abort_action_name,
+                abort_countdown,
+            )
         self.base.MOD_STOP()
-        print("[Task_func] Task 1 seeding flow finished.")
+        print("[Task_func] Seeding task flow finished.")
         return True
 
     def task2_executor(self):
@@ -297,6 +392,8 @@ class Task_func:
         cam_pose="L",
         timeout_s=5.0,
         max_missed_frames=5,
+        recover_pause_s=0.05,
+        recover_timeout_s=0.5,
         debug_hook=None,
         selector=None,
         selector_kwargs=None,
@@ -309,6 +406,7 @@ class Task_func:
         self.tracking_aligner.reset()
         start_time = time.time()
         missed_frames = 0
+        recover_start = None
         selector = selector or get_only_box
         selector_kwargs = selector_kwargs or {}
 
@@ -325,6 +423,9 @@ class Task_func:
             target_box = selector(detections, **selector_kwargs)
             if target_box is None or getattr(target_box, "center", None) is None:
                 missed_frames += 1
+                if recover_start is None:
+                    recover_start = time.time()
+                    self.base.MOD_STOP()
                 if callable(debug_hook):
                     debug_hook(
                         status="missing",
@@ -332,15 +433,22 @@ class Task_func:
                         debug=None,
                         missed_frames=missed_frames,
                     )
+                if recover_timeout_s is not None and recover_start is not None:
+                    if time.time() - recover_start > recover_timeout_s:
+                        self.tracking_aligner.reset()
+                        self.base.MOD_STOP()
+                        print(f"[Tracking] Recovery timeout after {missed_frames} missed frames.")
+                        return False
                 if missed_frames >= max_missed_frames:
                     self.tracking_aligner.reset()
                     self.base.MOD_STOP()
                     print(f"[Tracking] No target box for {missed_frames} frames.")
                     return False
-                time.sleep(0.02)
+                time.sleep(recover_pause_s)
                 continue
 
             missed_frames = 0
+            recover_start = None
 
             aligned, motion, debug = self.tracking_aligner.update(
                 target_box.center,
@@ -380,6 +488,33 @@ class Task_func:
                 f"x_err={x_text} y_err={y_text}"
             )
             time.sleep(0.02)
+
+    def _read_task_frame(self):
+        return self.task_shm.read_image(self.task_shm_key, (640, 640, 3), np.uint8)
+
+    def _run_search_action(self, search_actions, search_index, countdown):
+        if not search_actions:
+            return search_index
+        action = search_actions[search_index % len(search_actions)]
+        print(f"[Task_func] Search action -> {action}")
+        self.base.execute_base_motion(action, countdown=countdown)
+        return search_index + 1
+
+    def _task_fail(self, reason, abort_action_name=None, abort_countdown=0.15):
+        self.base.MOD_STOP()
+        if abort_action_name:
+            self.base.execute_base_motion(abort_action_name, countdown=abort_countdown)
+        print(f"[Task_func] Seeding task failed: {reason}")
+        return False
+
+    def _describe_seed_ready_issue(self, ready_state):
+        issues = []
+        for seed_key in ("large", "medium", "small"):
+            state = ready_state.get(seed_key, {})
+            if state.get("ready"):
+                continue
+            issues.append(f"{seed_key}:{state.get('reason', 'unknown')}")
+        return ", ".join(issues) if issues else "unknown"
 
     def _seed_grab(self, seed_key):
         print(f"[Task_func] Grab {seed_key} cylinder.")

@@ -87,6 +87,21 @@
     "SeedCTo3": [
       {"cmd": "Motion", "mode": 1, "pos_x": 180, "pos_y": -180, "z_angle": 0}
     ],
+    "SeedSearchForward": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 40, "z_angle": 0}
+    ],
+    "SeedSearchLeft": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 0, "z_angle": 12}
+    ],
+    "SeedSearchRight": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 0, "z_angle": -12}
+    ],
+    "SeedSearchBack": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": -40, "z_angle": 0}
+    ],
+    "SeedAbortReturn": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 80, "pos_y": -60, "z_angle": 0}
+    ],
     "SeedReturnLane": [
       {"cmd": "Motion", "mode": 1, "pos_x": 120, "pos_y": -80, "z_angle": 0}
     ]
@@ -106,12 +121,29 @@
       "sort_reverse": false,
       "ready_timeout_s": 6.0,
       "ready_confirm_frames": 3,
+      "ready_min_area": 900,
+      "ready_edge_margin": 8,
+      "ready_frame_width": 640,
+      "ready_frame_height": 640,
       "layout_timeout_s": 6.0,
       "layout_confirm_frames": 2,
+      "layout_min_score": 0.5,
+      "use_color_assist": true,
+      "color_patch_radius": 12,
       "track_timeout_s": 5.0,
       "max_missed_frames": 8,
+      "tracking_recover_pause_s": 0.06,
+      "tracking_recover_timeout_s": 0.5,
+      "tracking_retry_count": 2,
+      "seed_phase_timeout_s": 12.0,
       "cam_pose": "L",
       "search_action": "moveshort",
+      "search_actions": [
+        "SeedSearchForward",
+        "SeedSearchLeft",
+        "SeedSearchRight",
+        "SeedSearchBack"
+      ],
       "search_countdown": 0.12,
       "search_max_steps": 8,
       "pickup_target_pose": {
@@ -119,7 +151,9 @@
         "medium": [320, 265],
         "small": [320, 250]
       },
-      "return_action": "SeedReturnLane"
+      "return_action": "SeedReturnLane",
+      "abort_action": "SeedAbortReturn",
+      "abort_countdown": 0.2
     }
   }
 }

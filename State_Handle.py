@@ -110,8 +110,8 @@ class TaskManager:
                         if self.world_y > 10000 and self.tofR < 100:
                             self.seed_entry_count += 1
                             if self.seed_entry_count >= self.seed_entry_frames:
-                                print("[TaskManager] Enter Task1 seeding.")
-                                self.current_task = "Task1"
+                                print("[TaskManager] Enter Seeding task.")
+                                self.current_task = "Seeding"
                                 self.seed_entry_count = 0
                         else:
                             self.seed_entry_count = 0
@@ -140,8 +140,8 @@ class TaskManager:
             elif task_key == "basetest":
                 self.task_func.base_motion_test_executor()
                 self.current_task = "Lane"
-            elif task == "Task1":
-                self.task_func.task1_executor()
+            elif task == "Seeding":
+                self.task_func.seeding_executor()
                 self.current_task = "Lane"
             elif task == "Task2":
                 self.task_func.task2_executor()
