@@ -34,6 +34,8 @@ class TaskManager:
         self.tofR = 5000
         self.world_y = 0
         self.angz = 0
+        self.seed_entry_count = 0
+        self.seed_entry_frames = 3
 
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_0", size=640 * 640 * 3)
@@ -103,6 +105,16 @@ class TaskManager:
                     self.tofR = self.current_sensor_data.get("dist_sensorR", 5000)
                     self.world_y = self.current_sensor_data.get("world_y", 0)
                     self.angz = self.current_sensor_data.get("world_z_angle", 0)
+
+                    if self.current_task == "Lane":
+                        if self.world_y > 10000 and self.tofR < 100:
+                            self.seed_entry_count += 1
+                            if self.seed_entry_count >= self.seed_entry_frames:
+                                print("[TaskManager] Enter Task1 seeding.")
+                                self.current_task = "Task1"
+                                self.seed_entry_count = 0
+                        else:
+                            self.seed_entry_count = 0
             else:
                 no_data_count += 1
                 if no_data_count > 100:

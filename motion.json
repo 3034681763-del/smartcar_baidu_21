@@ -32,6 +32,94 @@
     ],
     "TurnRightSmall": [
       {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 0, "z_angle": -20}
+    ],
+    "Seed1ToA": [
+      {"cmd": "Motion", "mode": 1, "pos_x": -220, "pos_y": 260, "z_angle": 0}
+    ],
+    "Seed1ToB": [
+      {"cmd": "Motion", "mode": 1, "pos_x": -180, "pos_y": 280, "z_angle": 0}
+    ],
+    "Seed1ToC": [
+      {"cmd": "Motion", "mode": 1, "pos_x": -140, "pos_y": 300, "z_angle": 0}
+    ],
+    "Seed2ToA": [
+      {"cmd": "Motion", "mode": 1, "pos_x": -240, "pos_y": 180, "z_angle": 0}
+    ],
+    "Seed2ToB": [
+      {"cmd": "Motion", "mode": 1, "pos_x": -200, "pos_y": 210, "z_angle": 0}
+    ],
+    "Seed2ToC": [
+      {"cmd": "Motion", "mode": 1, "pos_x": -160, "pos_y": 240, "z_angle": 0}
+    ],
+    "Seed3ToA": [
+      {"cmd": "Motion", "mode": 1, "pos_x": -260, "pos_y": 120, "z_angle": 0}
+    ],
+    "Seed3ToB": [
+      {"cmd": "Motion", "mode": 1, "pos_x": -220, "pos_y": 150, "z_angle": 0}
+    ],
+    "Seed3ToC": [
+      {"cmd": "Motion", "mode": 1, "pos_x": -180, "pos_y": 180, "z_angle": 0}
+    ],
+    "SeedATo1": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 220, "pos_y": -260, "z_angle": 0}
+    ],
+    "SeedATo2": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 240, "pos_y": -180, "z_angle": 0}
+    ],
+    "SeedATo3": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 260, "pos_y": -120, "z_angle": 0}
+    ],
+    "SeedBTo1": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 180, "pos_y": -280, "z_angle": 0}
+    ],
+    "SeedBTo2": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 200, "pos_y": -210, "z_angle": 0}
+    ],
+    "SeedBTo3": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 220, "pos_y": -150, "z_angle": 0}
+    ],
+    "SeedCTo1": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 140, "pos_y": -300, "z_angle": 0}
+    ],
+    "SeedCTo2": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 160, "pos_y": -240, "z_angle": 0}
+    ],
+    "SeedCTo3": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 180, "pos_y": -180, "z_angle": 0}
+    ],
+    "SeedReturnLane": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 120, "pos_y": -80, "z_angle": 0}
     ]
+  },
+  "TASK_CONFIG": {
+    "SEEDING": {
+      "label_aliases": {
+        "large": ["largeround", "seed_large", "largecylinder", "seeding_large"],
+        "medium": ["mediumround", "seed_medium", "mediumcylinder", "seeding_medium"],
+        "small": ["smallround", "seed_small", "smallcylinder", "seeding_small"]
+      },
+      "drop_slot_map": {
+        "large": "a",
+        "medium": "b",
+        "small": "c"
+      },
+      "sort_reverse": false,
+      "ready_timeout_s": 6.0,
+      "ready_confirm_frames": 3,
+      "layout_timeout_s": 6.0,
+      "layout_confirm_frames": 2,
+      "track_timeout_s": 5.0,
+      "max_missed_frames": 8,
+      "cam_pose": "L",
+      "search_action": "moveshort",
+      "search_countdown": 0.12,
+      "search_max_steps": 8,
+      "pickup_target_pose": {
+        "large": [320, 270],
+        "medium": [320, 265],
+        "small": [320, 250]
+      },
+      "return_action": "SeedReturnLane"
+    }
   }
 }
