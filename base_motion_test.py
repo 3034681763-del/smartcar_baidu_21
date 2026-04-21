@@ -59,7 +59,7 @@ def main():
     )
     server.run()
 
-    base = Base_func(request_queue=request_queue)
+    base = Base_func(request_queue=request_queue, use_lane_shm=False)
     sequence = (
         [(action_key, args.countdown) for action_key in args.actions]
         if args.actions

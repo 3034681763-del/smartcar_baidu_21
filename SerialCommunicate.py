@@ -10,6 +10,11 @@ import serial
 
 class SerialCommunicate:
     def __init__(self, physical_path, baudrate):
+        self.ser = None
+        self.last_response = {}
+        self._running = False
+        self.thread_recv = None
+
         serial_device = self.find_serial_by_path(physical_path)
         if serial_device:
             print(f"[UART] Connected device: {serial_device}")
@@ -26,7 +31,7 @@ class SerialCommunicate:
             self.ser = None
             return
 
-        self.last_response = {}
+        self._running = True
         self.thread_recv = Thread(target=self.get_data_thread, args=(), daemon=True)
         self.thread_recv.start()
 
@@ -79,21 +84,30 @@ class SerialCommunicate:
         return " ".join(f"{byte:02X}" for byte in packet)
 
     def get_data_thread(self):
-        while True:
-            if self.ser.in_waiting <= 0:
-                time.sleep(0.005)
-                continue
+        while self._running:
+            ser = self.ser
+            if ser is None:
+                break
 
             try:
-                start = self.ser.read(1)
+                if ser.in_waiting <= 0:
+                    time.sleep(0.005)
+                    continue
+            except Exception as exc:
+                if self._running:
+                    print(f"[UART] Receive error: {exc}")
+                break
+
+            try:
+                start = ser.read(1)
                 if not start or struct.unpack("=b", start)[0] != 0x42:
                     continue
 
                 tmp_data = [start]
-                address = self.ser.read(1)
+                address = ser.read(1)
                 tmp_data.append(address)
 
-                len_byte = self.ser.read(1)
+                len_byte = ser.read(1)
                 if not len_byte:
                     continue
                 tmp_data.append(len_byte)
@@ -101,7 +115,7 @@ class SerialCommunicate:
                 frame_len = struct.unpack("=b", len_byte)[0]
                 remaining = frame_len - 3
                 for _ in range(remaining):
-                    tmp_data.append(self.ser.read(1))
+                    tmp_data.append(ser.read(1))
 
                 if struct.unpack("=b", tmp_data[frame_len - 1])[0] != 0x3C:
                     continue
@@ -134,7 +148,9 @@ class SerialCommunicate:
                 else:
                     print(f"[UART] Unknown upstream cmd: {cmd}")
             except Exception as exc:
-                print(f"[UART] Receive error: {exc}")
+                if self._running:
+                    print(f"[UART] Receive error: {exc}")
+                break
 
     def send_motion_mode(self, mode, deviation=None, speed_x=None, pos_x=None, pos_y=None, z_angle=None):
         if self.ser is None:
@@ -194,8 +210,18 @@ class SerialCommunicate:
         print(f"[UART TX HEX] {self.packet_to_hex(packet)}")
 
     def close(self):
-        if self.ser and self.ser.isOpen():
-            self.ser.close()
+        self._running = False
+        thread = self.thread_recv
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=1.0)
+
+        ser = self.ser
+        self.ser = None
+        if ser and ser.isOpen():
+            try:
+                ser.close()
+            except Exception:
+                pass
 
 
 class SerialServer:
