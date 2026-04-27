@@ -49,6 +49,7 @@ class TaskManager:
         self.irrigation_entry_distance = float(self.irrigation_cfg.get("entry_distance", 14000))
         self.irrigation_entry_tof_r_max = float(self.irrigation_cfg.get("entry_tof_r_max", 120))
         self.irrigation_completed = False
+        self.irrigation_wait_for_reset = False
 
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_0", size=640 * 640 * 3)
@@ -132,17 +133,24 @@ class TaskManager:
                             self.seed_entry_count = 0
 
                         if self.seed_completed and (not self.irrigation_completed):
-                            if (
+                            irrigation_entry_active = (
                                 self.world_y > self.irrigation_entry_distance
                                 and self.tofR < self.irrigation_entry_tof_r_max
-                            ):
-                                self.irrigation_entry_count += 1
-                                if self.irrigation_entry_count >= self.irrigation_entry_frames:
-                                    print("[TaskManager] Enter Irrigation task.")
-                                    self.current_task = "Irrigation"
-                                    self.irrigation_entry_count = 0
-                            else:
+                            )
+                            if self.irrigation_wait_for_reset:
                                 self.irrigation_entry_count = 0
+                                if not irrigation_entry_active:
+                                    self.irrigation_wait_for_reset = False
+                                    print("[TaskManager] Irrigation entry re-armed from Lane.")
+                            else:
+                                if irrigation_entry_active:
+                                    self.irrigation_entry_count += 1
+                                    if self.irrigation_entry_count >= self.irrigation_entry_frames:
+                                        print("[TaskManager] Enter Irrigation task.")
+                                        self.current_task = "Irrigation"
+                                        self.irrigation_entry_count = 0
+                                else:
+                                    self.irrigation_entry_count = 0
             else:
                 no_data_count += 1
                 if no_data_count > 100:
@@ -171,6 +179,9 @@ class TaskManager:
             elif task == "Seeding":
                 result = self.task_func.seeding_executor()
                 self.seed_completed = bool(result)
+                if result:
+                    self.irrigation_wait_for_reset = True
+                    self.irrigation_entry_count = 0
                 self.current_task = "Lane"
             elif task in ("Task2", "Irrigation"):
                 result = self.task_func.irrigation_executor()
