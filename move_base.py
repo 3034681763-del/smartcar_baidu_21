@@ -26,6 +26,8 @@ from tool_func import (
 class Base_func:
     """Base control bridge for chassis and actuator commands."""
 
+    BASE_MOTION_SEND_REPEATS = 10
+
     def __init__(
         self,
         mode="normal",
@@ -99,7 +101,13 @@ class Base_func:
                 print(f"[MoveBase] Action-done event is not configured, cannot run: {action_key}")
                 return False
             self.action_done_event.clear()
-            self.send_motion_command(motion)
+            for repeat_index in range(self.BASE_MOTION_SEND_REPEATS):
+                self.send_motion_command(motion)
+                print(
+                    f"[MoveBase] Base motion send {repeat_index + 1}/"
+                    f"{self.BASE_MOTION_SEND_REPEATS}: {action_key}"
+                )
+                time.sleep(0.02)
             print(f"[MoveBase] Waiting for action ack: {action_key}")
             self.action_done_event.wait()
             self.action_done_event.clear()
