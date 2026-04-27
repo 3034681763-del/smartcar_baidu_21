@@ -5,6 +5,8 @@ import numpy as np
 from box_pid import BoxPidAligner
 from get_json import load_params
 from irrigation_task import IrrigationTaskExecutor
+from pest_confirm_task import PestConfirmTaskExecutor
+from shooting_task import ShootingTaskExecutor
 from shared_memory_manager import SharedMemoryManager
 from tool_func import (
     DEFAULT_SEED_LABEL_ALIASES,
@@ -142,6 +144,26 @@ class Base_func:
             self.request_queue.put(data)
         return {"status": "queued", "cmd": "SysMode"}
 
+    def execute_shoot_instruction(self, instruction=None, wait_timeout_s=None):
+        instruction = instruction or {"cmd": "SysMode", "flag": 9}
+        if self.request_queue is None:
+            print("[MoveBase] Request queue is not configured, cannot shoot.")
+            return False
+
+        timeout_s = self.default_action_ack_timeout_s if wait_timeout_s is None else float(wait_timeout_s)
+        if self.action_done_event is None:
+            print("[MoveBase] Action-done event is not configured, cannot wait for shoot ack.")
+            return False
+
+        self.action_done_event.clear()
+        self.request_queue.put(dict(instruction))
+        if not self.action_done_event.wait(timeout=timeout_s):
+            print(f"[MoveBase] Shoot action wait timeout ({timeout_s:.2f}s)")
+            self.MOD_STOP()
+            return False
+        self.action_done_event.clear()
+        return True
+
     def execute_chassis_instruction(self, instruction, countdown=0.3):
         if not instruction:
             return True
@@ -184,6 +206,19 @@ class Task_func:
         self.irrigation_executor_impl = IrrigationTaskExecutor(
             self.base,
             ocr_reader=self.ocr_reader,
+            task_client=self.task_client,
+            task_shm_key=self.task_shm_key,
+            tracking_callback=self.tracking_executor,
+        )
+        self.pest_confirm_executor_impl = PestConfirmTaskExecutor(
+            self.base,
+            task_client=self.task_client,
+            task_shm=self.task_shm,
+            task_shm_key=self.task_shm_key,
+            tracking_callback=self.tracking_executor,
+        )
+        self.shooting_executor_impl = ShootingTaskExecutor(
+            self.base,
             task_client=self.task_client,
             task_shm_key=self.task_shm_key,
             tracking_callback=self.tracking_executor,
@@ -394,6 +429,17 @@ class Task_func:
 
     def task2_executor(self):
         return self.irrigation_executor()
+
+    def pest_confirm_executor(self):
+        return self.pest_confirm_executor_impl.run()
+
+    def shooting_executor(self, pest_results):
+        return self.shooting_executor_impl.run(pest_results)
+
+    def has_pest_animal(self):
+        if self.task_client is None:
+            return False
+        return self.pest_confirm_executor_impl.has_animal()
 
     def task3_executor(self):
         print("[Task_func] Executing Task 3 placeholder...")

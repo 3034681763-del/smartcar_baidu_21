@@ -158,6 +158,58 @@
       "abort_action": "SeedAbortReturn",
       "abort_countdown": 0.2
     },
+    "PEST_CONFIRM": {
+      "entry_distance": 1000,
+      "entry_confirm_frames": 3,
+      "confirm_count": 4,
+      "animal_label_aliases": [
+        "animal",
+        "animal_card",
+        "pest_card",
+        "insect",
+        "beneficial_animal"
+      ],
+      "min_score": 0.5,
+      "confirm_roi": [80, 120, 420, 560],
+      "align_target_pose": [320, 260],
+      "track_timeout_s": 4.0,
+      "max_missed_frames": 6,
+      "recover_pause_s": 0.06,
+      "recover_timeout_s": 0.5,
+      "cam_pose": "L",
+      "crop_pad": 32,
+      "advance_action": "Front",
+      "advance_countdown": 0.2,
+      "settle_after_advance_s": 0.15
+    },
+    "PEST_SHOOT": {
+      "entry_distance": 2000,
+      "entry_confirm_frames": 1,
+      "heading_delta_min": 70,
+      "heading_delta_max": 110,
+      "animal_label_aliases": [
+        "animal",
+        "animal_card",
+        "pest_card",
+        "insect",
+        "beneficial_animal"
+      ],
+      "min_score": 0.5,
+      "shoot_roi": [40, 80, 600, 600],
+      "shoot_target_pose": [320, 260],
+      "track_timeout_s": 4.0,
+      "max_missed_frames": 6,
+      "recover_pause_s": 0.06,
+      "recover_timeout_s": 0.5,
+      "cam_pose": "shoot",
+      "shoot_command": {"cmd": "SysMode", "flag": 9},
+      "shoot_ack_timeout_s": 3.0,
+      "settle_after_shoot_s": 0.25,
+      "disappear_confirm_frames": 3,
+      "disappear_check_interval_s": 0.08,
+      "same_target_iou": 0.25,
+      "max_retry_per_target": 5
+    },
     "IRRIGATION": {
       "tower_order": [1, 2],
       "supply_order": ["a", "b", "c"],

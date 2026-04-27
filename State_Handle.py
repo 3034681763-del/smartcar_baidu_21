@@ -38,18 +38,32 @@ class TaskManager:
         self.angz = 0
         task_cfg = load_params("motion.json").get("TASK_CONFIG", {})
         self.seeding_cfg = task_cfg.get("SEEDING", {})
+        self.pest_cfg = task_cfg.get("PEST_CONFIRM", {})
+        self.shooting_cfg = task_cfg.get("PEST_SHOOT", {})
         self.irrigation_cfg = task_cfg.get("IRRIGATION", {})
         self.seed_entry_count = 0
         self.seed_entry_frames = int(self.seeding_cfg.get("entry_confirm_frames", 3))
         self.seed_entry_distance = float(self.seeding_cfg.get("entry_distance", 10000))
         self.seed_entry_tof_r_max = float(self.seeding_cfg.get("entry_tof_r_max", 100))
         self.seed_completed = False
+        self.pest_entry_count = 0
+        self.pest_entry_frames = int(self.pest_cfg.get("entry_confirm_frames", 3))
+        self.pest_entry_distance = float(self.pest_cfg.get("entry_distance", 1000))
+        self.pest_confirm_completed = False
+        self.pest_results = []
         self.irrigation_entry_count = 0
         self.irrigation_entry_frames = int(self.irrigation_cfg.get("entry_confirm_frames", 3))
         self.irrigation_entry_distance = float(self.irrigation_cfg.get("entry_distance", 14000))
         self.irrigation_entry_tof_r_max = float(self.irrigation_cfg.get("entry_tof_r_max", 120))
         self.irrigation_completed = False
         self.irrigation_wait_for_reset = False
+        self.shooting_entry_count = 0
+        self.shooting_entry_frames = int(self.shooting_cfg.get("entry_confirm_frames", 1))
+        self.shooting_entry_distance = float(self.shooting_cfg.get("entry_distance", 2000))
+        self.shooting_heading_delta_min = float(self.shooting_cfg.get("heading_delta_min", 70))
+        self.shooting_heading_delta_max = float(self.shooting_cfg.get("heading_delta_max", 110))
+        self.shooting_completed = False
+        self.last_angz = None
 
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_0", size=640 * 640 * 3)
@@ -118,7 +132,9 @@ class TaskManager:
                     self.tofL = self.current_sensor_data.get("dist_sensorL", 5000)
                     self.tofR = self.current_sensor_data.get("dist_sensorR", 5000)
                     self.world_y = self.current_sensor_data.get("world_y", 0)
+                    prev_angz = self.angz
                     self.angz = self.current_sensor_data.get("world_z_angle", 0)
+                    heading_delta = self._angle_delta(self.angz, prev_angz)
 
                     if self.current_task == "Lane":
                         if (not self.seed_completed) and (
@@ -132,7 +148,21 @@ class TaskManager:
                         else:
                             self.seed_entry_count = 0
 
-                        if self.seed_completed and (not self.irrigation_completed):
+                        if self.seed_completed and (not self.pest_confirm_completed):
+                            pest_entry_active = (
+                                self.world_y > self.pest_entry_distance
+                                and self._has_pest_animal()
+                            )
+                            if pest_entry_active:
+                                self.pest_entry_count += 1
+                                if self.pest_entry_count >= self.pest_entry_frames:
+                                    print("[TaskManager] Enter PestConfirm task.")
+                                    self.current_task = "PestConfirm"
+                                    self.pest_entry_count = 0
+                            else:
+                                self.pest_entry_count = 0
+
+                        if self.seed_completed and self.pest_confirm_completed and (not self.irrigation_completed):
                             irrigation_entry_active = (
                                 self.world_y > self.irrigation_entry_distance
                                 and self.tofR < self.irrigation_entry_tof_r_max
@@ -151,6 +181,25 @@ class TaskManager:
                                         self.irrigation_entry_count = 0
                                 else:
                                     self.irrigation_entry_count = 0
+
+                        if self.irrigation_completed and (not self.shooting_completed):
+                            shooting_entry_active = (
+                                self.world_y > self.shooting_entry_distance
+                                and self.shooting_heading_delta_min
+                                <= heading_delta
+                                <= self.shooting_heading_delta_max
+                            )
+                            if shooting_entry_active:
+                                self.shooting_entry_count += 1
+                                if self.shooting_entry_count >= self.shooting_entry_frames:
+                                    print(
+                                        "[TaskManager] Enter Shooting task. "
+                                        f"heading_delta={heading_delta:.2f}"
+                                    )
+                                    self.current_task = "Shooting"
+                                    self.shooting_entry_count = 0
+                            else:
+                                self.shooting_entry_count = 0
             else:
                 no_data_count += 1
                 if no_data_count > 100:
@@ -183,9 +232,24 @@ class TaskManager:
                     self.irrigation_wait_for_reset = True
                     self.irrigation_entry_count = 0
                 self.current_task = "Lane"
+            elif task == "PestConfirm":
+                result = self.task_func.pest_confirm_executor()
+                if result is not None and len(result) == int(self.pest_cfg.get("confirm_count", 4)):
+                    self.pest_results = [int(item) for item in result]
+                    self.pest_confirm_completed = True
+                    self.irrigation_wait_for_reset = True
+                    self.irrigation_entry_count = 0
+                    print(f"[TaskManager] Pest confirm results: {self.pest_results}")
+                else:
+                    print("[TaskManager] Pest confirm failed, will retry from Lane.")
+                self.current_task = "Lane"
             elif task in ("Task2", "Irrigation"):
                 result = self.task_func.irrigation_executor()
                 self.irrigation_completed = bool(result)
+                self.current_task = "Lane"
+            elif task == "Shooting":
+                result = self.task_func.shooting_executor(self.pest_results)
+                self.shooting_completed = bool(result)
                 self.current_task = "Lane"
             elif task == "Task3":
                 self.task_func.task3_executor()
@@ -211,3 +275,22 @@ class TaskManager:
         for client in self.task_clients.values():
             client.close()
         self.shm_manager.release_all()
+
+    def _has_pest_animal(self):
+        if not self.enable_aux_models or self.task_client is None:
+            return False
+        try:
+            return self.task_func.has_pest_animal()
+        except Exception as exc:
+            print(f"[TaskManager] Pest animal check failed: {exc}")
+            return False
+
+    @staticmethod
+    def _angle_delta(current_angle, previous_angle):
+        try:
+            current = float(current_angle) % 360.0
+            previous = float(previous_angle) % 360.0
+        except (TypeError, ValueError):
+            return 0.0
+        diff = abs(current - previous)
+        return min(diff, 360.0 - diff)

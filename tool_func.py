@@ -43,6 +43,14 @@ DEFAULT_IRRIGATION_PLACE_LABEL_ALIASES = [
     "tower_tray",
 ]
 
+DEFAULT_ANIMAL_LABEL_ALIASES = [
+    "animal",
+    "animal_card",
+    "pest_card",
+    "insect",
+    "beneficial_animal",
+]
+
 
 def _normalize_targets(target_labels):
     if target_labels is None:
@@ -248,6 +256,105 @@ def get_irrigation_supply_box(detections, label_aliases=None, min_score=0.5):
 def get_irrigation_place_box(detections, label_aliases=None, min_score=0.5):
     aliases = label_aliases or DEFAULT_IRRIGATION_PLACE_LABEL_ALIASES
     return get_biggest_box(detections, target_labels=aliases, min_score=min_score)
+
+
+def get_leftmost_animal_box(detections, label_aliases=None, min_score=0.5):
+    aliases = label_aliases or DEFAULT_ANIMAL_LABEL_ALIASES
+    filtered = _filter_detections(detections, target_labels=aliases, min_score=min_score)
+    if not filtered:
+        return None
+    return min(filtered, key=lambda det: float(getattr(det, "bbox", (0, 0, 0, 0))[0]))
+
+
+def get_sorted_animal_boxes(detections, label_aliases=None, min_score=0.5, roi=None):
+    aliases = label_aliases or DEFAULT_ANIMAL_LABEL_ALIASES
+    filtered = _filter_detections(detections, target_labels=aliases, min_score=min_score)
+    if roi:
+        rx1, ry1, rx2, ry2 = [float(value) for value in roi]
+        filtered = [
+            det for det in filtered
+            if rx1 <= float(det.center[0]) <= rx2 and ry1 <= float(det.center[1]) <= ry2
+        ]
+    return sorted(filtered, key=lambda det: float(getattr(det, "bbox", (0, 0, 0, 0))[0]))
+
+
+def get_animal_box_by_rank(detections, rank=0, label_aliases=None, min_score=0.5, roi=None):
+    boxes = get_sorted_animal_boxes(
+        detections,
+        label_aliases=label_aliases,
+        min_score=min_score,
+        roi=roi,
+    )
+    rank = int(rank)
+    if rank < 0 or rank >= len(boxes):
+        return None
+    return boxes[rank]
+
+
+def same_detection_area_visible(detections, target_box, label_aliases=None, min_score=0.5, iou_threshold=0.25):
+    if target_box is None:
+        return False
+
+    tx1, ty1, tx2, ty2 = [float(value) for value in getattr(target_box, "bbox", (0, 0, 0, 0))]
+    target_area = max(0.0, tx2 - tx1) * max(0.0, ty2 - ty1)
+    if target_area <= 0:
+        return False
+
+    for box in get_sorted_animal_boxes(detections, label_aliases=label_aliases, min_score=min_score):
+        x1, y1, x2, y2 = [float(value) for value in getattr(box, "bbox", (0, 0, 0, 0))]
+        inter_x1 = max(tx1, x1)
+        inter_y1 = max(ty1, y1)
+        inter_x2 = min(tx2, x2)
+        inter_y2 = min(ty2, y2)
+        inter_area = max(0.0, inter_x2 - inter_x1) * max(0.0, inter_y2 - inter_y1)
+        box_area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+        union_area = target_area + box_area - inter_area
+        if union_area > 0 and inter_area / union_area >= float(iou_threshold):
+            return True
+    return False
+
+
+def get_animal_box_in_roi(
+    detections,
+    roi=None,
+    target_pose=(320, 260),
+    label_aliases=None,
+    min_score=0.5,
+):
+    aliases = label_aliases or DEFAULT_ANIMAL_LABEL_ALIASES
+    filtered = _filter_detections(detections, target_labels=aliases, min_score=min_score)
+    if not filtered:
+        return None
+
+    if roi:
+        rx1, ry1, rx2, ry2 = [float(value) for value in roi]
+        filtered = [
+            det for det in filtered
+            if rx1 <= float(det.center[0]) <= rx2 and ry1 <= float(det.center[1]) <= ry2
+        ]
+        if not filtered:
+            return None
+
+    tx, ty = target_pose
+    return min(
+        filtered,
+        key=lambda det: math.hypot(float(det.center[0]) - float(tx), float(det.center[1]) - float(ty)),
+    )
+
+
+def crop_detection_with_padding(image, detection, pad=32):
+    if image is None or detection is None:
+        return None
+
+    height, width = image.shape[:2]
+    x1, y1, x2, y2 = [int(round(float(value))) for value in detection.bbox]
+    x1 = max(0, x1 - int(pad))
+    y1 = max(0, y1 - int(pad))
+    x2 = min(width, x2 + int(pad))
+    y2 = min(height, y2 + int(pad))
+    if x1 >= x2 or y1 >= y2:
+        return None
+    return image[y1:y2, x1:x2].copy()
 
 
 def parse_irrigation_need_text(texts, default=None, max_need=3):
