@@ -98,13 +98,10 @@ class Base_func:
             if self.action_done_event is None:
                 print(f"[MoveBase] Action-done event is not configured, cannot run: {action_key}")
                 return False
-            wait_timeout_s = float(motion.get("wait_timeout_s", self.default_action_ack_timeout_s))
             self.action_done_event.clear()
             self.send_motion_command(motion)
-            if not self.action_done_event.wait(timeout=wait_timeout_s):
-                print(f"[MoveBase] Action wait timeout: {action_key} ({wait_timeout_s:.2f}s)")
-                self.MOD_STOP()
-                return False
+            print(f"[MoveBase] Waiting for action ack: {action_key}")
+            self.action_done_event.wait()
             self.action_done_event.clear()
         return True
 
@@ -132,13 +129,10 @@ class Base_func:
             if self.action_done_event is None:
                 print(f"[MoveBase] Action-done event is not configured, cannot run arm action: {action_key}")
                 return False
-            wait_timeout_s = float(motion.get("wait_timeout_s", self.default_action_ack_timeout_s))
             self.action_done_event.clear()
             self.send_motion_command(motion)
-            if not self.action_done_event.wait(timeout=wait_timeout_s):
-                print(f"[MoveBase] Arm action wait timeout: {action_key} ({wait_timeout_s:.2f}s)")
-                self.MOD_STOP()
-                return False
+            print(f"[MoveBase] Waiting for arm action ack: {action_key}")
+            self.action_done_event.wait()
             self.action_done_event.clear()
         return True
 
@@ -160,17 +154,14 @@ class Base_func:
             print(f"[MoveBase] Request queue is not configured, cannot run {action_name}.")
             return False
 
-        timeout_s = self.default_action_ack_timeout_s if wait_timeout_s is None else float(wait_timeout_s)
         if self.action_done_event is None:
             print(f"[MoveBase] Action-done event is not configured, cannot wait for {action_name} ack.")
             return False
 
         self.action_done_event.clear()
         self.request_queue.put(dict(instruction))
-        if not self.action_done_event.wait(timeout=timeout_s):
-            print(f"[MoveBase] {action_name} wait timeout ({timeout_s:.2f}s)")
-            self.MOD_STOP()
-            return False
+        print(f"[MoveBase] Waiting for {action_name} ack.")
+        self.action_done_event.wait()
         self.action_done_event.clear()
         return True
 
