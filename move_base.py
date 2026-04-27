@@ -5,6 +5,7 @@ import numpy as np
 from box_pid import BoxPidAligner
 from get_json import load_params
 from irrigation_task import IrrigationTaskExecutor
+from order_delivery_task import OrderDeliveryTaskExecutor
 from pest_confirm_task import PestConfirmTaskExecutor
 from shooting_task import ShootingTaskExecutor
 from shared_memory_manager import SharedMemoryManager
@@ -145,20 +146,26 @@ class Base_func:
         return {"status": "queued", "cmd": "SysMode"}
 
     def execute_shoot_instruction(self, instruction=None, wait_timeout_s=None):
-        instruction = instruction or {"cmd": "SysMode", "flag": 9}
+        return self.execute_wait_instruction(
+            instruction or {"cmd": "SysMode", "flag": 9},
+            wait_timeout_s=wait_timeout_s,
+            action_name="shoot",
+        )
+
+    def execute_wait_instruction(self, instruction, wait_timeout_s=None, action_name="custom action"):
         if self.request_queue is None:
-            print("[MoveBase] Request queue is not configured, cannot shoot.")
+            print(f"[MoveBase] Request queue is not configured, cannot run {action_name}.")
             return False
 
         timeout_s = self.default_action_ack_timeout_s if wait_timeout_s is None else float(wait_timeout_s)
         if self.action_done_event is None:
-            print("[MoveBase] Action-done event is not configured, cannot wait for shoot ack.")
+            print(f"[MoveBase] Action-done event is not configured, cannot wait for {action_name} ack.")
             return False
 
         self.action_done_event.clear()
         self.request_queue.put(dict(instruction))
         if not self.action_done_event.wait(timeout=timeout_s):
-            print(f"[MoveBase] Shoot action wait timeout ({timeout_s:.2f}s)")
+            print(f"[MoveBase] {action_name} wait timeout ({timeout_s:.2f}s)")
             self.MOD_STOP()
             return False
         self.action_done_event.clear()
@@ -219,6 +226,13 @@ class Task_func:
         )
         self.shooting_executor_impl = ShootingTaskExecutor(
             self.base,
+            task_client=self.task_client,
+            task_shm_key=self.task_shm_key,
+            tracking_callback=self.tracking_executor,
+        )
+        self.order_delivery_executor_impl = OrderDeliveryTaskExecutor(
+            self.base,
+            ocr_reader=self.ocr_reader,
             task_client=self.task_client,
             task_shm_key=self.task_shm_key,
             tracking_callback=self.tracking_executor,
@@ -435,6 +449,14 @@ class Task_func:
 
     def shooting_executor(self, pest_results):
         return self.shooting_executor_impl.run(pest_results)
+
+    def order_delivery_executor(self):
+        return self.order_delivery_executor_impl.run()
+
+    def has_order_machine(self):
+        if self.task_client is None:
+            return False
+        return self.order_delivery_executor_impl.has_order_machine()
 
     def has_pest_animal(self):
         if self.task_client is None:

@@ -40,6 +40,7 @@ class TaskManager:
         self.seeding_cfg = task_cfg.get("SEEDING", {})
         self.pest_cfg = task_cfg.get("PEST_CONFIRM", {})
         self.shooting_cfg = task_cfg.get("PEST_SHOOT", {})
+        self.order_delivery_cfg = task_cfg.get("ORDER_DELIVERY", {})
         self.irrigation_cfg = task_cfg.get("IRRIGATION", {})
         self.seed_entry_count = 0
         self.seed_entry_frames = int(self.seeding_cfg.get("entry_confirm_frames", 3))
@@ -64,6 +65,11 @@ class TaskManager:
         self.shooting_heading_delta_max = float(self.shooting_cfg.get("heading_delta_max", 110))
         self.shooting_completed = False
         self.last_angz = None
+        self.task45_completed = bool(self.order_delivery_cfg.get("assume_task45_completed", True))
+        self.order_delivery_entry_count = 0
+        self.order_delivery_entry_frames = int(self.order_delivery_cfg.get("entry_confirm_frames", 3))
+        self.order_delivery_entry_distance = float(self.order_delivery_cfg.get("entry_distance", 8000))
+        self.order_delivery_completed = False
 
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_0", size=640 * 640 * 3)
@@ -200,6 +206,25 @@ class TaskManager:
                                     self.shooting_entry_count = 0
                             else:
                                 self.shooting_entry_count = 0
+
+                        if (
+                            self.current_task == "Lane"
+                            and self.shooting_completed
+                            and self.task45_completed
+                            and (not self.order_delivery_completed)
+                        ):
+                            order_entry_active = (
+                                self.world_y > self.order_delivery_entry_distance
+                                and self._has_order_machine()
+                            )
+                            if order_entry_active:
+                                self.order_delivery_entry_count += 1
+                                if self.order_delivery_entry_count >= self.order_delivery_entry_frames:
+                                    print("[TaskManager] Enter OrderDelivery task.")
+                                    self.current_task = "OrderDelivery"
+                                    self.order_delivery_entry_count = 0
+                            else:
+                                self.order_delivery_entry_count = 0
             else:
                 no_data_count += 1
                 if no_data_count > 100:
@@ -251,6 +276,10 @@ class TaskManager:
                 result = self.task_func.shooting_executor(self.pest_results)
                 self.shooting_completed = bool(result)
                 self.current_task = "Lane"
+            elif task == "OrderDelivery":
+                result = self.task_func.order_delivery_executor()
+                self.order_delivery_completed = bool(result)
+                self.current_task = "Lane"
             elif task == "Task3":
                 self.task_func.task3_executor()
                 self.current_task = "Lane"
@@ -283,6 +312,15 @@ class TaskManager:
             return self.task_func.has_pest_animal()
         except Exception as exc:
             print(f"[TaskManager] Pest animal check failed: {exc}")
+            return False
+
+    def _has_order_machine(self):
+        if not self.enable_aux_models or self.task_client is None:
+            return False
+        try:
+            return self.task_func.has_order_machine()
+        except Exception as exc:
+            print(f"[TaskManager] Order machine check failed: {exc}")
             return False
 
     @staticmethod

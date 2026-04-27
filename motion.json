@@ -109,6 +109,78 @@
       {"cmd": "Motion", "mode": 1, "pos_x": 120, "pos_y": -80, "z_angle": 0}
     ]
   },
+  "ARM_MOTION": {
+    "ArmSafe": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 512, "mot2": 512, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmOrderCameraView": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 460, "mot2": 560, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmShelfOverview": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 390, "mot2": 520, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPickSlot1": [
+      {"cmd": "Arm", "mot0": 430, "mot1": 500, "mot2": 610, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 430, "mot1": 560, "mot2": 680, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 430, "mot1": 470, "mot2": 560, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPickSlot2": [
+      {"cmd": "Arm", "mot0": 470, "mot1": 500, "mot2": 610, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 470, "mot1": 560, "mot2": 680, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 470, "mot1": 470, "mot2": 560, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPickSlot3": [
+      {"cmd": "Arm", "mot0": 510, "mot1": 500, "mot2": 610, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 510, "mot1": 560, "mot2": 680, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 510, "mot1": 470, "mot2": 560, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPickSlot4": [
+      {"cmd": "Arm", "mot0": 550, "mot1": 500, "mot2": 610, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 550, "mot1": 560, "mot2": 680, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 550, "mot1": 470, "mot2": 560, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPickSlot5": [
+      {"cmd": "Arm", "mot0": 430, "mot1": 610, "mot2": 720, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 430, "mot1": 670, "mot2": 790, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 430, "mot1": 520, "mot2": 610, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPickSlot6": [
+      {"cmd": "Arm", "mot0": 470, "mot1": 610, "mot2": 720, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 470, "mot1": 670, "mot2": 790, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 470, "mot1": 520, "mot2": 610, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPickSlot7": [
+      {"cmd": "Arm", "mot0": 510, "mot1": 610, "mot2": 720, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 510, "mot1": 670, "mot2": 790, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 510, "mot1": 520, "mot2": 610, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPickSlot8": [
+      {"cmd": "Arm", "mot0": 550, "mot1": 610, "mot2": 720, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 550, "mot1": 670, "mot2": 790, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 550, "mot1": 520, "mot2": 610, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmIrrigationPickPrepare": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 500, "mot2": 620, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmIrrigationPick": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 600, "mot2": 720, "mot3": 512, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmIrrigationLift": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 460, "mot2": 560, "mot3": 512, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmIrrigationPlacePrepare": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 520, "mot2": 620, "mot3": 512, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmIrrigationPlace": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 650, "mot2": 760, "mot3": 512, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmIrrigationRelease": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 650, "mot2": 760, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmIrrigationSafe": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 512, "mot2": 512, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ]
+  },
   "TASK_CONFIG": {
     "SEEDING": {
       "label_aliases": {
@@ -209,6 +281,96 @@
       "disappear_check_interval_s": 0.08,
       "same_target_iou": 0.25,
       "max_retry_per_target": 5
+    },
+    "ORDER_DELIVERY": {
+      "assume_task45_completed": true,
+      "entry_distance": 8000,
+      "entry_confirm_frames": 3,
+      "order_machine_label_aliases": [
+        "order_machine",
+        "order_kiosk",
+        "order_device"
+      ],
+      "text_label_aliases": [
+        "text"
+      ],
+      "shelf_label_aliases": [
+        "shelf",
+        "goods_shelf",
+        "cargo_shelf"
+      ],
+      "goods_label_aliases": {
+        "corn": ["corn", "maize", "yellow_corn"],
+        "tomato": ["tomato", "red_tomato"],
+        "eggplant": ["eggplant", "aubergine", "purple_eggplant"],
+        "pepper": ["pepper", "green_pepper"],
+        "potato": ["potato"],
+        "pumpkin": ["pumpkin"],
+        "cabbage": ["cabbage"],
+        "cucumber": ["cucumber"]
+      },
+      "valid_goods": [
+        "corn",
+        "tomato",
+        "eggplant",
+        "pepper",
+        "potato",
+        "pumpkin",
+        "cabbage",
+        "cucumber"
+      ],
+      "valid_buildings": [
+        "1",
+        "2"
+      ],
+      "item_count": 2,
+      "min_score": 0.5,
+      "order_text_target_pose": [320, 240],
+      "shelf_target_pose": [320, 260],
+      "track_timeout_s": 4.0,
+      "max_missed_frames": 6,
+      "recover_pause_s": 0.06,
+      "recover_timeout_s": 0.5,
+      "cam_pose": "L",
+      "push_order_command": {"cmd": "SysMode", "flag": 10},
+      "push_ack_timeout_s": 3.0,
+      "image_settle_s": 0.5,
+      "ocr_stable_times": 2,
+      "ocr_retry_count": 6,
+      "ocr_inner_retries": 4,
+      "ocr_retry_interval_s": 0.1,
+      "ocr_result_amount": 2,
+      "ocr_sort_by": "y",
+      "common_order_camera_action": "ArmOrderCameraView",
+      "shelf_overview_camera_action": "ArmShelfOverview",
+      "shelf_overview_settle_s": 0.4,
+      "shelf_grid_rows": 4,
+      "shelf_grid_cols": 2,
+      "goods_min_score": 0.5,
+      "goods_min_detect_count": 8,
+      "goods_layout_confirm_frames": 2,
+      "goods_layout_retry_count": 8,
+      "goods_layout_retry_interval_s": 0.08,
+      "move_to_shelf_action": "movelong",
+      "action_countdown": 0.2,
+      "arm_action_countdown": 0.2,
+      "allow_static_pick_fallback": false,
+      "slot_action_grid": [
+        ["ArmPickSlot1", "ArmPickSlot2"],
+        ["ArmPickSlot3", "ArmPickSlot4"],
+        ["ArmPickSlot5", "ArmPickSlot6"],
+        ["ArmPickSlot7", "ArmPickSlot8"]
+      ],
+      "pick_action_map": {
+        "corn": "ArmPickSlot1",
+        "tomato": "ArmPickSlot2",
+        "eggplant": "ArmPickSlot3",
+        "pepper": "ArmPickSlot4",
+        "potato": "ArmPickSlot5",
+        "pumpkin": "ArmPickSlot6",
+        "cabbage": "ArmPickSlot7",
+        "cucumber": "ArmPickSlot8"
+      }
     },
     "IRRIGATION": {
       "tower_order": [1, 2],
