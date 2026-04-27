@@ -19,6 +19,30 @@ DEFAULT_SEED_COLOR_RULES = {
     "medium": "blue_bias",
 }
 
+DEFAULT_IRRIGATION_BOARD_LABEL_ALIASES = [
+    "waterneed",
+    "tower_board",
+    "irrigation_board",
+    "water_demand_board",
+    "droplet_board",
+]
+
+DEFAULT_IRRIGATION_SUPPLY_LABEL_ALIASES = [
+    "waterblock",
+    "irrigation_block",
+    "water_cube",
+    "cube",
+    "bluecube",
+]
+
+DEFAULT_IRRIGATION_PLACE_LABEL_ALIASES = [
+    "watertower",
+    "towerplatform",
+    "irrigation_place",
+    "place_slot",
+    "tower_tray",
+]
+
 
 def _normalize_targets(target_labels):
     if target_labels is None:
@@ -209,6 +233,65 @@ def get_seed_box(detections, size_key, label_aliases=None, min_score=0.5):
         target_labels=aliases.get(size_key, []),
         min_score=min_score,
     )
+
+
+def get_irrigation_board_box(detections, label_aliases=None, min_score=0.5):
+    aliases = label_aliases or DEFAULT_IRRIGATION_BOARD_LABEL_ALIASES
+    return get_biggest_box(detections, target_labels=aliases, min_score=min_score)
+
+
+def get_irrigation_supply_box(detections, label_aliases=None, min_score=0.5):
+    aliases = label_aliases or DEFAULT_IRRIGATION_SUPPLY_LABEL_ALIASES
+    return get_biggest_box(detections, target_labels=aliases, min_score=min_score)
+
+
+def get_irrigation_place_box(detections, label_aliases=None, min_score=0.5):
+    aliases = label_aliases or DEFAULT_IRRIGATION_PLACE_LABEL_ALIASES
+    return get_biggest_box(detections, target_labels=aliases, min_score=min_score)
+
+
+def parse_irrigation_need_text(texts, default=None, max_need=3):
+    if texts is None:
+        return default
+
+    if not isinstance(texts, (list, tuple)):
+        texts = [texts]
+
+    normalized = []
+    for item in texts:
+        if item is None:
+            continue
+        if isinstance(item, (list, tuple)):
+            normalized.append(" ".join(str(part) for part in item if part is not None))
+        else:
+            normalized.append(str(item))
+
+    digit_map = {
+        "一": 1,
+        "壹": 1,
+        "1": 1,
+        "一滴": 1,
+        "二": 2,
+        "贰": 2,
+        "两": 2,
+        "2": 2,
+        "二滴": 2,
+        "三": 3,
+        "叁": 3,
+        "3": 3,
+        "三滴": 3,
+    }
+
+    for text in normalized:
+        for token, value in digit_map.items():
+            if token in text and value <= max_need:
+                return value
+        digits = [int(ch) for ch in text if ch.isdigit()]
+        for digit in digits:
+            if 0 < digit <= max_need:
+                return digit
+
+    return default
 
 
 def has_all_seed_targets(

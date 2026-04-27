@@ -154,6 +154,77 @@
       "return_action": "SeedReturnLane",
       "abort_action": "SeedAbortReturn",
       "abort_countdown": 0.2
+    },
+    "IRRIGATION": {
+      "tower_order": [1, 2],
+      "supply_order": ["a", "b", "c"],
+      "entry_distance": 14000,
+      "entry_tof_r_max": 120,
+      "entry_confirm_frames": 3,
+      "default_need_count": 1,
+      "max_need_count": 2,
+      "read_retry_count": 1,
+      "ocr_result_amount": 3,
+      "ocr_sort_by": "y",
+      "use_visual_alignment": true,
+      "track_timeout_s": 4.0,
+      "max_missed_frames": 6,
+      "recover_pause_s": 0.06,
+      "recover_timeout_s": 0.5,
+      "cam_pose": "L",
+      "board_target_pose": [320, 230],
+      "supply_target_pose": [320, 255],
+      "place_target_pose": [320, 245],
+      "action_countdown": 0.2,
+      "arm_action_countdown": 0.15,
+      "abort_countdown": 0.2,
+      "supply_counts": {
+        "a": 2,
+        "b": 2,
+        "c": 2
+      },
+      "board_label_aliases": [
+        "waterneed",
+        "tower_board",
+        "irrigation_board",
+        "water_demand_board",
+        "droplet_board"
+      ],
+      "supply_label_aliases": [
+        "waterblock",
+        "irrigation_block",
+        "water_cube",
+        "cube",
+        "bluecube"
+      ],
+      "place_label_aliases": [
+        "watertower",
+        "towerplatform",
+        "irrigation_place",
+        "place_slot",
+        "tower_tray"
+      ],
+      "actions": {
+        "enter": "IrrigationEnter",
+        "tower1_read": "IrrigationGotoTower1Read",
+        "tower2_read": "IrrigationGotoTower2Read",
+        "supply_a": "IrrigationGotoSupplyA",
+        "supply_b": "IrrigationGotoSupplyB",
+        "supply_c": "IrrigationGotoSupplyC",
+        "tower1_place": "IrrigationGotoTower1Place",
+        "tower2_place": "IrrigationGotoTower2Place",
+        "return": "IrrigationReturnLane",
+        "abort": "IrrigationAbortReturn"
+      },
+      "arm_actions": {
+        "pick_prepare": "ArmIrrigationPickPrepare",
+        "pick": "ArmIrrigationPick",
+        "lift": "ArmIrrigationLift",
+        "place_prepare": "ArmIrrigationPlacePrepare",
+        "place": "ArmIrrigationPlace",
+        "release": "ArmIrrigationRelease",
+        "safe": "ArmIrrigationSafe"
+      }
     }
   }
 }

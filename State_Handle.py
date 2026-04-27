@@ -5,6 +5,7 @@ import time
 import numpy as np
 
 from infer_server_client import InferClient1, OCRPipeline, model_configs
+from get_json import load_params
 from move_base import Base_func
 from shared_memory_manager import SharedMemoryManager
 
@@ -34,8 +35,19 @@ class TaskManager:
         self.tofR = 5000
         self.world_y = 0
         self.angz = 0
+        task_cfg = load_params("motion.json").get("TASK_CONFIG", {})
+        self.seeding_cfg = task_cfg.get("SEEDING", {})
+        self.irrigation_cfg = task_cfg.get("IRRIGATION", {})
         self.seed_entry_count = 0
-        self.seed_entry_frames = 3
+        self.seed_entry_frames = int(self.seeding_cfg.get("entry_confirm_frames", 3))
+        self.seed_entry_distance = float(self.seeding_cfg.get("entry_distance", 10000))
+        self.seed_entry_tof_r_max = float(self.seeding_cfg.get("entry_tof_r_max", 100))
+        self.seed_completed = False
+        self.irrigation_entry_count = 0
+        self.irrigation_entry_frames = int(self.irrigation_cfg.get("entry_confirm_frames", 3))
+        self.irrigation_entry_distance = float(self.irrigation_cfg.get("entry_distance", 14000))
+        self.irrigation_entry_tof_r_max = float(self.irrigation_cfg.get("entry_tof_r_max", 120))
+        self.irrigation_completed = False
 
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_0", size=640 * 640 * 3)
@@ -107,7 +119,9 @@ class TaskManager:
                     self.angz = self.current_sensor_data.get("world_z_angle", 0)
 
                     if self.current_task == "Lane":
-                        if self.world_y > 10000 and self.tofR < 100:
+                        if (not self.seed_completed) and (
+                            self.world_y > self.seed_entry_distance and self.tofR < self.seed_entry_tof_r_max
+                        ):
                             self.seed_entry_count += 1
                             if self.seed_entry_count >= self.seed_entry_frames:
                                 print("[TaskManager] Enter Seeding task.")
@@ -115,6 +129,19 @@ class TaskManager:
                                 self.seed_entry_count = 0
                         else:
                             self.seed_entry_count = 0
+
+                        if self.seed_completed and (not self.irrigation_completed):
+                            if (
+                                self.world_y > self.irrigation_entry_distance
+                                and self.tofR < self.irrigation_entry_tof_r_max
+                            ):
+                                self.irrigation_entry_count += 1
+                                if self.irrigation_entry_count >= self.irrigation_entry_frames:
+                                    print("[TaskManager] Enter Irrigation task.")
+                                    self.current_task = "Irrigation"
+                                    self.irrigation_entry_count = 0
+                            else:
+                                self.irrigation_entry_count = 0
             else:
                 no_data_count += 1
                 if no_data_count > 100:
@@ -141,10 +168,12 @@ class TaskManager:
                 self.task_func.base_motion_test_executor()
                 self.current_task = "Lane"
             elif task == "Seeding":
-                self.task_func.seeding_executor()
+                result = self.task_func.seeding_executor()
+                self.seed_completed = bool(result)
                 self.current_task = "Lane"
-            elif task == "Task2":
-                self.task_func.task2_executor()
+            elif task in ("Task2", "Irrigation"):
+                result = self.task_func.irrigation_executor()
+                self.irrigation_completed = bool(result)
                 self.current_task = "Lane"
             elif task == "Task3":
                 self.task_func.task3_executor()

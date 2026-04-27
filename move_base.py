@@ -4,6 +4,7 @@ import numpy as np
 
 from box_pid import BoxPidAligner
 from get_json import load_params
+from irrigation_task import IrrigationTaskExecutor
 from shared_memory_manager import SharedMemoryManager
 from tool_func import (
     DEFAULT_SEED_LABEL_ALIASES,
@@ -115,6 +116,24 @@ class Base_func:
             self.request_queue.put(data)
         return {"status": "queued", "cmd": "SysMode"}
 
+    def execute_chassis_instruction(self, instruction, countdown=0.3):
+        if not instruction:
+            return True
+        print(f"[MoveBase] Chassis instruction -> {instruction}")
+        if instruction in self.base_actions:
+            return self.execute_base_motion(instruction, countdown=countdown)
+        time.sleep(max(countdown, 0.05))
+        return True
+
+    def execute_arm_instruction(self, instruction, countdown=0.2):
+        if not instruction:
+            return True
+        print(f"[MoveBase] Arm instruction -> {instruction}")
+        if instruction in self.arm_actions:
+            return self.execute_arm_action(instruction, countdown=countdown)
+        time.sleep(max(countdown, 0.05))
+        return True
+
 
 class Task_func:
     """Placeholder task library. Task2 now demonstrates the OCR call chain."""
@@ -135,6 +154,14 @@ class Task_func:
         self.task_shm.create_block(task_shm_key, size=640 * 640 * 3)
         task_cfg = load_params("motion.json").get("TASK_CONFIG", {})
         self.seeding_cfg = task_cfg.get("SEEDING", {})
+        self.irrigation_cfg = task_cfg.get("IRRIGATION", {})
+        self.irrigation_executor_impl = IrrigationTaskExecutor(
+            self.base,
+            ocr_reader=self.ocr_reader,
+            task_client=self.task_client,
+            task_shm_key=self.task_shm_key,
+            tracking_callback=self.tracking_executor,
+        )
 
     def task1_executor(self):
         return self.seeding_executor()
@@ -340,27 +367,16 @@ class Task_func:
         return True
 
     def task2_executor(self):
-        print("[Task_func] Executing Task 2 OCR placeholder...")
-        if self.ocr_reader is None:
-            print("[Task_func] OCR reader is not configured.")
-            return
-
-        texts = self.ocr_reader.read_texts(
-            shm_key=self.task_shm_key,
-            shape=(640, 640, 3),
-            result_amount=1,
-            sort_by="y",
-        )
-        if texts:
-            print(f"[Task_func] OCR result: {texts}")
-        else:
-            print("[Task_func] OCR returned no text.")
+        return self.irrigation_executor()
 
     def task3_executor(self):
         print("[Task_func] Executing Task 3 placeholder...")
 
     def task4_executor(self):
         print("[Task_func] Executing Task 4 placeholder...")
+
+    def irrigation_executor(self, supply_counts=None):
+        return self.irrigation_executor_impl.run(supply_counts=supply_counts)
 
     def base_motion_test_executor(self):
         print("[Task_func] Executing base motion group test...")
