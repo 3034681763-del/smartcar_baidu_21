@@ -115,6 +115,7 @@ def main():
         return 0
     finally:
         ack_stop_event.set()
+        ack_thread.join(timeout=1.0)
         base.MOD_STOP()
         time.sleep(0.1)
         server.close()
