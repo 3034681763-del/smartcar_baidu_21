@@ -2,7 +2,7 @@
 import argparse
 import threading
 import time
-from queue import Queue
+from queue import Empty, Queue
 
 from move_base import Base_func
 from SerialCommunicate import SerialServer
@@ -20,6 +20,21 @@ DEFAULT_SEQUENCE = [
     ("TurnRight", 0.8),
     ("Default", 0.3),
 ]
+
+
+def ack_print_loop(publish_queue, stop_event):
+    while not stop_event.is_set():
+        try:
+            msg = publish_queue.get(timeout=0.1)
+        except Empty:
+            continue
+
+        if msg.get("cmd") != "ActionDone":
+            continue
+
+        data = msg.get("data") or {}
+        flag = data.get("flag")
+        print(f"[base_motion_test] ACK received: flag={flag}")
 
 
 def build_parser():
@@ -52,6 +67,7 @@ def main():
     request_queue = Queue()
     publish_queue = Queue()
     action_done_event = threading.Event()
+    ack_stop_event = threading.Event()
 
     server = SerialServer(
         serial_path=args.physical_path,
@@ -61,6 +77,12 @@ def main():
         action_done_event=action_done_event,
     )
     server.run()
+    ack_thread = threading.Thread(
+        target=ack_print_loop,
+        args=(publish_queue, ack_stop_event),
+        daemon=True,
+    )
+    ack_thread.start()
 
     base = Base_func(
         request_queue=request_queue,
@@ -92,6 +114,7 @@ def main():
         print("[base_motion_test] Stopped by user.")
         return 0
     finally:
+        ack_stop_event.set()
         base.MOD_STOP()
         time.sleep(0.1)
         server.close()
