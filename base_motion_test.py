@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import threading
 import time
 from queue import Queue
 
@@ -50,16 +51,22 @@ def main():
     args = build_parser().parse_args()
     request_queue = Queue()
     publish_queue = Queue()
+    action_done_event = threading.Event()
 
     server = SerialServer(
         serial_path=args.physical_path,
         baudrate=args.baudrate,
         request_queue=request_queue,
         publish_queue=publish_queue,
+        action_done_event=action_done_event,
     )
     server.run()
 
-    base = Base_func(request_queue=request_queue, use_lane_shm=False)
+    base = Base_func(
+        request_queue=request_queue,
+        use_lane_shm=False,
+        action_done_event=action_done_event,
+    )
     sequence = (
         [(action_key, args.countdown) for action_key in args.actions]
         if args.actions

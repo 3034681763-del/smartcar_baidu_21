@@ -21,8 +21,9 @@ class TaskManager:
         publish_queue=None,
         enable_aux_models=True,
         task_shm_key="shm_task",
+        action_done_event=None,
     ):
-        self.movebase = Base_func(request_queue=request_queue)
+        self.movebase = Base_func(request_queue=request_queue, action_done_event=action_done_event)
 
         self.current_task = "Lane"
         self.stopJudge = threading.Event()

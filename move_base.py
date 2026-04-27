@@ -20,9 +20,17 @@ from tool_func import (
 class Base_func:
     """Base control bridge for chassis and actuator commands."""
 
-    def __init__(self, mode="normal", request_queue=None, base_file="motion.json", use_lane_shm=True):
+    def __init__(
+        self,
+        mode="normal",
+        request_queue=None,
+        base_file="motion.json",
+        use_lane_shm=True,
+        action_done_event=None,
+    ):
         self.mode = mode
         self.request_queue = request_queue
+        self.action_done_event = action_done_event
         self.shm_manager = SharedMemoryManager()
         self.use_lane_shm = use_lane_shm
         if self.use_lane_shm:
@@ -30,6 +38,8 @@ class Base_func:
         motion_cfg = load_params(filename=base_file)
         self.base_actions = motion_cfg.get("BASE_MOTION", {})
         self.arm_actions = motion_cfg.get("ARM_MOTION", {})
+        action_ack_cfg = motion_cfg.get("ACTION_ACK", {})
+        self.default_action_ack_timeout_s = float(action_ack_cfg.get("wait_timeout_s", 8.0))
 
     def MOD_LANE(self, base_speed=-0.28):
         if not self.use_lane_shm:
@@ -79,9 +89,17 @@ class Base_func:
             return False
 
         for motion in motion_list:
+            if self.action_done_event is None:
+                print(f"[MoveBase] Action-done event is not configured, cannot run: {action_key}")
+                return False
+            wait_timeout_s = float(motion.get("wait_timeout_s", self.default_action_ack_timeout_s))
+            self.action_done_event.clear()
             self.send_motion_command(motion)
-            time.sleep(0.02)
-            time.sleep(countdown)
+            if not self.action_done_event.wait(timeout=wait_timeout_s):
+                print(f"[MoveBase] Action wait timeout: {action_key} ({wait_timeout_s:.2f}s)")
+                self.MOD_STOP()
+                return False
+            self.action_done_event.clear()
         return True
 
     def execute_arm_motion(self, mot0, mot1, mot2, mot3, suck=0, light=0):
@@ -105,9 +123,17 @@ class Base_func:
             return False
 
         for motion in motion_list:
+            if self.action_done_event is None:
+                print(f"[MoveBase] Action-done event is not configured, cannot run arm action: {action_key}")
+                return False
+            wait_timeout_s = float(motion.get("wait_timeout_s", self.default_action_ack_timeout_s))
+            self.action_done_event.clear()
             self.send_motion_command(motion)
-            time.sleep(0.02)
-            time.sleep(countdown)
+            if not self.action_done_event.wait(timeout=wait_timeout_s):
+                print(f"[MoveBase] Arm action wait timeout: {action_key} ({wait_timeout_s:.2f}s)")
+                self.MOD_STOP()
+                return False
+            self.action_done_event.clear()
         return True
 
     def set_sys_mode(self, flag):

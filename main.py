@@ -28,13 +28,14 @@ def start_framework():
     shm_manager.create_block("shm_crop", size=640 * 640 * 3)
     request_queue = multiprocessing.Queue()
     publish_queue = multiprocessing.Queue()
+    action_done_event = multiprocessing.Event()
 
     mgr = ProcessManager()
 
     print("[Main] Starting UART service process...")
     mgr.add_process(
         target=serial_server_process,
-        args=(SERIAL_PHYSICAL_PATH, 115200, request_queue, publish_queue),
+        args=(SERIAL_PHYSICAL_PATH, 115200, request_queue, publish_queue, action_done_event),
     )
 
     print("[Main] Starting lane/task camera process...")
@@ -60,6 +61,7 @@ def start_framework():
         publish_queue=publish_queue,
         enable_aux_models=ENABLE_AUX_MODELS,
         task_shm_key="shm_task",
+        action_done_event=action_done_event,
     )
     brain.start()
 

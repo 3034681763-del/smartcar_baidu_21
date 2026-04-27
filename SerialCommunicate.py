@@ -9,12 +9,13 @@ import serial
 
 
 class SerialCommunicate:
-    def __init__(self, physical_path, baudrate):
+    def __init__(self, physical_path, baudrate, action_done_event=None):
         self.ser = None
         self.last_response = {}
         self._running = False
         self.thread_recv = None
-
+        self.action_done_event = action_done_event
+        self.last_action_done = None
         serial_device = self.find_serial_by_path(physical_path)
         if serial_device:
             print(f"[UART] Connected device: {serial_device}")
@@ -83,6 +84,22 @@ class SerialCommunicate:
     def packet_to_hex(packet):
         return " ".join(f"{byte:02X}" for byte in packet)
 
+    def _read_exact(self, size):
+        chunks = []
+        total = 0
+        while total < size:
+            chunk = self.ser.read(size - total)
+            if not chunk:
+                return None
+            chunks.append(chunk)
+            total += len(chunk)
+        return b"".join(chunks)
+
+    def _mark_action_done(self, flag):
+        self.last_action_done = {"flag": int(flag), "timestamp": time.time()}
+        if self.action_done_event is not None:
+            self.action_done_event.set()
+
     def get_data_thread(self):
         while self._running:
             ser = self.ser
@@ -99,29 +116,51 @@ class SerialCommunicate:
                 break
 
             try:
-                start = ser.read(1)
-                if not start or struct.unpack("=b", start)[0] != 0x42:
+                start = self._read_exact(1)
+                if not start or struct.unpack("=B", start)[0] != 0x42:
                     continue
 
-                tmp_data = [start]
-                address = ser.read(1)
-                tmp_data.append(address)
+                address = self._read_exact(1)
+                len_byte = self._read_exact(1)
+                if not address or not len_byte:
+                    continue
 
-                len_byte = ser.read(1)
+                cmd = struct.unpack("=B", address)[0]
+                len_value = struct.unpack("=B", len_byte)[0]
+
+                if cmd == 0x05:
+                    payload = self._read_exact(len_value)
+                    tail = self._read_exact(1)
+                    if payload is None or not tail:
+                        continue
+                    if struct.unpack("=B", tail)[0] != 0x3C:
+                        continue
+                    if len_value == 1 and payload[0] == 0x05:
+                        self._mark_action_done(payload[0])
+                    else:
+                        print("[UART] Invalid action-done payload, frame dropped")
+                    continue
+
+                tmp_data = [start, address, len_byte]
                 if not len_byte:
                     continue
-                tmp_data.append(len_byte)
-
-                frame_len = struct.unpack("=b", len_byte)[0]
+                frame_len = len_value
                 remaining = frame_len - 3
+                if remaining <= 0:
+                    continue
                 for _ in range(remaining):
-                    tmp_data.append(ser.read(1))
+                    byte = self._read_exact(1)
+                    if not byte:
+                        tmp_data = []
+                        break
+                    tmp_data.append(byte)
+                if not tmp_data:
+                    continue
 
-                if struct.unpack("=b", tmp_data[frame_len - 1])[0] != 0x3C:
+                if struct.unpack("=B", tmp_data[frame_len - 1])[0] != 0x3C:
                     continue
 
                 data_field = tmp_data[3:frame_len - 1]
-                cmd = struct.unpack("=b", tmp_data[1])[0]
 
                 if cmd == 0x01:
                     if len(data_field) == 18:
@@ -225,11 +264,19 @@ class SerialCommunicate:
 
 
 class SerialServer:
-    def __init__(self, serial_path="1-2.1:1.0", baudrate=115200, request_queue=None, publish_queue=None):
-        self.serial_comm = SerialCommunicate(serial_path, baudrate)
+    def __init__(
+        self,
+        serial_path="1-2.1:1.0",
+        baudrate=115200,
+        request_queue=None,
+        publish_queue=None,
+        action_done_event=None,
+    ):
+        self.serial_comm = SerialCommunicate(serial_path, baudrate, action_done_event=action_done_event)
         self.flag_exit = False
         self.request_queue = request_queue or Queue()
         self.publish_queue = publish_queue or Queue()
+        self.last_pub_action_done_ts = 0.0
 
     def process_rep_requests(self, timeout=0.1):
         while not self.flag_exit:
@@ -277,6 +324,10 @@ class SerialServer:
             data = self.serial_comm.last_response
             if data:
                 self.publish_queue.put({"cmd": "PushResp", "data": data})
+            action_done = self.serial_comm.last_action_done
+            if action_done and action_done["timestamp"] > self.last_pub_action_done_ts:
+                self.publish_queue.put({"cmd": "ActionDone", "data": {"flag": action_done["flag"]}})
+                self.last_pub_action_done_ts = action_done["timestamp"]
             time.sleep(0.02)
 
     def run(self, stop_event=None):
@@ -301,6 +352,7 @@ def serial_server_process(
     baudrate=115200,
     request_queue=None,
     publish_queue=None,
+    action_done_event=None,
 ):
     print("[SerialServer] Hardware communication subprocess started")
     server = SerialServer(
@@ -308,5 +360,6 @@ def serial_server_process(
         baudrate=baudrate,
         request_queue=request_queue,
         publish_queue=publish_queue,
+        action_done_event=action_done_event,
     )
     server.run(stop_event)
