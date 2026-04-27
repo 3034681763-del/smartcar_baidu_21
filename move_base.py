@@ -7,6 +7,7 @@ from get_json import load_params
 from irrigation_task import IrrigationTaskExecutor
 from order_delivery_task import OrderDeliveryTaskExecutor
 from pest_confirm_task import PestConfirmTaskExecutor
+from place_delivery_task import PlaceDeliveryTaskExecutor
 from shooting_task import ShootingTaskExecutor
 from shared_memory_manager import SharedMemoryManager
 from tool_func import (
@@ -237,6 +238,13 @@ class Task_func:
             task_shm_key=self.task_shm_key,
             tracking_callback=self.tracking_executor,
         )
+        self.place_delivery_executor_impl = PlaceDeliveryTaskExecutor(
+            self.base,
+            ocr_reader=self.ocr_reader,
+            task_client=self.task_client,
+            task_shm_key=self.task_shm_key,
+            tracking_callback=self.tracking_executor,
+        )
 
     def task1_executor(self):
         return self.seeding_executor()
@@ -453,10 +461,21 @@ class Task_func:
     def order_delivery_executor(self):
         return self.order_delivery_executor_impl.run()
 
+    def get_last_order(self):
+        return self.order_delivery_executor_impl.last_order
+
+    def place_delivery_executor(self, order):
+        return self.place_delivery_executor_impl.run(order)
+
     def has_order_machine(self):
         if self.task_client is None:
             return False
         return self.order_delivery_executor_impl.has_order_machine()
+
+    def has_unit(self, building="1"):
+        if self.task_client is None:
+            return False
+        return self.place_delivery_executor_impl.has_unit(building)
 
     def has_pest_animal(self):
         if self.task_client is None:

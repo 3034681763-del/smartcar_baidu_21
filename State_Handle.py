@@ -41,6 +41,7 @@ class TaskManager:
         self.pest_cfg = task_cfg.get("PEST_CONFIRM", {})
         self.shooting_cfg = task_cfg.get("PEST_SHOOT", {})
         self.order_delivery_cfg = task_cfg.get("ORDER_DELIVERY", {})
+        self.place_delivery_cfg = task_cfg.get("PLACE_DELIVERY", {})
         self.irrigation_cfg = task_cfg.get("IRRIGATION", {})
         self.seed_entry_count = 0
         self.seed_entry_frames = int(self.seeding_cfg.get("entry_confirm_frames", 3))
@@ -70,6 +71,11 @@ class TaskManager:
         self.order_delivery_entry_frames = int(self.order_delivery_cfg.get("entry_confirm_frames", 3))
         self.order_delivery_entry_distance = float(self.order_delivery_cfg.get("entry_distance", 8000))
         self.order_delivery_completed = False
+        self.place_delivery_entry_count = 0
+        self.place_delivery_entry_frames = int(self.place_delivery_cfg.get("entry_confirm_frames", 3))
+        self.place_delivery_entry_distance = float(self.place_delivery_cfg.get("entry_distance", 12000))
+        self.place_delivery_completed = False
+        self.last_order = None
 
         self.shm_manager = SharedMemoryManager()
         self.shm_manager.create_block("shm_0", size=640 * 640 * 3)
@@ -225,6 +231,25 @@ class TaskManager:
                                     self.order_delivery_entry_count = 0
                             else:
                                 self.order_delivery_entry_count = 0
+
+                        if (
+                            self.current_task == "Lane"
+                            and self.order_delivery_completed
+                            and (not self.place_delivery_completed)
+                            and self.last_order
+                        ):
+                            place_entry_active = (
+                                self.world_y > self.place_delivery_entry_distance
+                                and self._has_unit1()
+                            )
+                            if place_entry_active:
+                                self.place_delivery_entry_count += 1
+                                if self.place_delivery_entry_count >= self.place_delivery_entry_frames:
+                                    print("[TaskManager] Enter PlaceDelivery task.")
+                                    self.current_task = "PlaceDelivery"
+                                    self.place_delivery_entry_count = 0
+                            else:
+                                self.place_delivery_entry_count = 0
             else:
                 no_data_count += 1
                 if no_data_count > 100:
@@ -279,6 +304,13 @@ class TaskManager:
             elif task == "OrderDelivery":
                 result = self.task_func.order_delivery_executor()
                 self.order_delivery_completed = bool(result)
+                if result:
+                    self.last_order = self.task_func.get_last_order()
+                    print(f"[TaskManager] Last order saved for placing: {self.last_order}")
+                self.current_task = "Lane"
+            elif task == "PlaceDelivery":
+                result = self.task_func.place_delivery_executor(self.last_order)
+                self.place_delivery_completed = bool(result)
                 self.current_task = "Lane"
             elif task == "Task3":
                 self.task_func.task3_executor()
@@ -321,6 +353,15 @@ class TaskManager:
             return self.task_func.has_order_machine()
         except Exception as exc:
             print(f"[TaskManager] Order machine check failed: {exc}")
+            return False
+
+    def _has_unit1(self):
+        if not self.enable_aux_models or self.task_client is None:
+            return False
+        try:
+            return self.task_func.has_unit("1")
+        except Exception as exc:
+            print(f"[TaskManager] Unit 1 check failed: {exc}")
             return False
 
     @staticmethod

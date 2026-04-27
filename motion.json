@@ -107,6 +107,15 @@
     ],
     "SeedReturnLane": [
       {"cmd": "Motion", "mode": 1, "pos_x": 120, "pos_y": -80, "z_angle": 0}
+    ],
+    "DeliveryBack30": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": -30, "z_angle": 0}
+    ],
+    "DeliveryUnit1To2": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 300, "z_angle": 0}
+    ],
+    "DeliveryReturnLane": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": -120, "z_angle": 0}
     ]
   },
   "ARM_MOTION": {
@@ -158,6 +167,42 @@
       {"cmd": "Arm", "mot0": 550, "mot1": 610, "mot2": 720, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
       {"cmd": "Arm", "mot0": 550, "mot1": 670, "mot2": 790, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
       {"cmd": "Arm", "mot0": 550, "mot1": 520, "mot2": 610, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPlaceR1C1": [
+      {"cmd": "Arm", "mot0": 430, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 430, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 430, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 430, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPlaceR1C2": [
+      {"cmd": "Arm", "mot0": 480, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 480, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 480, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 480, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPlaceR1C3": [
+      {"cmd": "Arm", "mot0": 530, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 530, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 530, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 530, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPlaceR2C1": [
+      {"cmd": "Arm", "mot0": 430, "mot1": 570, "mot2": 690, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 430, "mot1": 700, "mot2": 820, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 430, "mot1": 700, "mot2": 820, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 430, "mot1": 570, "mot2": 690, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPlaceR2C2": [
+      {"cmd": "Arm", "mot0": 480, "mot1": 570, "mot2": 690, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 480, "mot1": 700, "mot2": 820, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 480, "mot1": 700, "mot2": 820, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 480, "mot1": 570, "mot2": 690, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmPlaceR2C3": [
+      {"cmd": "Arm", "mot0": 530, "mot1": 570, "mot2": 690, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 530, "mot1": 700, "mot2": 820, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 530, "mot1": 700, "mot2": 820, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 530, "mot1": 570, "mot2": 690, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
     ],
     "ArmIrrigationPickPrepare": [
       {"cmd": "Arm", "mot0": 512, "mot1": 500, "mot2": 620, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
@@ -371,6 +416,46 @@
         "cabbage": "ArmPickSlot7",
         "cucumber": "ArmPickSlot8"
       }
+    },
+    "PLACE_DELIVERY": {
+      "entry_distance": 12000,
+      "entry_confirm_frames": 3,
+      "valid_buildings": [
+        "1",
+        "2"
+      ],
+      "min_score": 0.5,
+      "cam_pose": "L",
+      "track_timeout_s": 4.0,
+      "max_missed_frames": 6,
+      "recover_pause_s": 0.06,
+      "recover_timeout_s": 0.5,
+      "unit_label_aliases": {
+        "1": ["unit_1", "building_1", "one_unit"],
+        "2": ["unit_2", "building_2", "two_unit"]
+      },
+      "unit_target_pose": [320, 260],
+      "back_for_name_view_action": "DeliveryBack30",
+      "unit1_to_unit2_action": "DeliveryUnit1To2",
+      "return_lane_action": "DeliveryReturnLane",
+      "safe_arm_action": "ArmSafe",
+      "text_label_aliases": [
+        "text"
+      ],
+      "text_expected_count": 6,
+      "text_grid_rows": 2,
+      "text_grid_cols": 3,
+      "text_pad": 12,
+      "ocr_stable_times": 2,
+      "ocr_retry_count": 8,
+      "ocr_inner_retries": 2,
+      "ocr_retry_interval_s": 0.1,
+      "action_countdown": 0.2,
+      "arm_action_countdown": 0.2,
+      "place_action_grid": [
+        ["ArmPlaceR1C1", "ArmPlaceR1C2", "ArmPlaceR1C3"],
+        ["ArmPlaceR2C1", "ArmPlaceR2C2", "ArmPlaceR2C3"]
+      ]
     },
     "IRRIGATION": {
       "tower_order": [1, 2],

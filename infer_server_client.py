@@ -301,3 +301,61 @@ class OCRPipeline:
             time.sleep(0.05)
 
         return stable_texts or []
+
+    def read_text_items(
+        self,
+        shm_key="shm_0",
+        shape=(640, 640, 3),
+        dtype=np.uint8,
+        target_label="text",
+        result_amount=1,
+        sort_by="y",
+        pad=12,
+        retries=6,
+        require_count=None,
+    ):
+        last_items = []
+
+        for _ in range(retries):
+            frame = self.shm_manager.read_image(shm_key, shape, np.dtype(dtype))
+            detections = self.task_client(shm_key, shape, np.dtype(dtype))
+            selected = select_detections_by_label(detections, target_label, sort_by)
+            if require_count is not None and len(selected) != int(require_count):
+                time.sleep(0.05)
+                continue
+            if not selected:
+                time.sleep(0.05)
+                continue
+
+            items = []
+            for det in selected[:result_amount]:
+                x1, y1, x2, y2 = map(int, det.bbox)
+                x1 = max(0, x1 - pad)
+                y1 = max(0, y1 - pad)
+                x2 = min(frame.shape[1], x2 + pad)
+                y2 = min(frame.shape[0], y2 + pad)
+                crop = frame[y1:y2, x1:x2]
+                if crop.size == 0:
+                    continue
+                self.shm_manager.write_image(self.crop_key, crop)
+                text = self.word_client(self.crop_key, crop.shape, crop.dtype)
+                if not text:
+                    continue
+                items.append(
+                    {
+                        "bbox": tuple(det.bbox),
+                        "center": tuple(det.center),
+                        "text": str(text).strip(),
+                    }
+                )
+
+            if require_count is not None and len(items) != int(require_count):
+                last_items = items
+                time.sleep(0.05)
+                continue
+            if items:
+                return items
+            last_items = items
+            time.sleep(0.05)
+
+        return last_items
