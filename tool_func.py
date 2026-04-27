@@ -266,6 +266,21 @@ def get_leftmost_animal_box(detections, label_aliases=None, min_score=0.5):
     return min(filtered, key=lambda det: float(getattr(det, "bbox", (0, 0, 0, 0))[0]))
 
 
+def get_leftmost_box(detections, label_aliases=None, min_score=0.5, roi=None):
+    filtered = _filter_detections(detections, target_labels=label_aliases, min_score=min_score)
+    if roi:
+        rx1, ry1, rx2, ry2 = [float(value) for value in roi]
+        filtered = [
+            det for det in filtered
+            if getattr(det, "center", None) is not None
+            and rx1 <= float(det.center[0]) <= rx2
+            and ry1 <= float(det.center[1]) <= ry2
+        ]
+    if not filtered:
+        return None
+    return min(filtered, key=lambda det: float(getattr(det, "bbox", (0, 0, 0, 0))[0]))
+
+
 def get_sorted_animal_boxes(detections, label_aliases=None, min_score=0.5, roi=None):
     aliases = label_aliases or DEFAULT_ANIMAL_LABEL_ALIASES
     filtered = _filter_detections(detections, target_labels=aliases, min_score=min_score)

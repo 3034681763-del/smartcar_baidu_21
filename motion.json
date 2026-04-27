@@ -116,6 +116,12 @@
     ],
     "DeliveryReturnLane": [
       {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": -120, "z_angle": 0}
+    ],
+    "HarvestAdvanceStep": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 80, "z_angle": 0}
+    ],
+    "SortMoveToSmallWarehouse": [
+      {"cmd": "Motion", "mode": 1, "pos_x": 0, "pos_y": 180, "z_angle": 0}
     ]
   },
   "ARM_MOTION": {
@@ -203,6 +209,41 @@
       {"cmd": "Arm", "mot0": 530, "mot1": 700, "mot2": 820, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
       {"cmd": "Arm", "mot0": 530, "mot1": 700, "mot2": 820, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
       {"cmd": "Arm", "mot0": 530, "mot1": 570, "mot2": 690, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmHarvestBlueToBin": [
+      {"cmd": "Arm", "mot0": 470, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 470, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 390, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 390, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 512, "mot1": 512, "mot2": 512, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmHarvestYellowToBin": [
+      {"cmd": "Arm", "mot0": 470, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 470, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 610, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 610, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 512, "mot1": 512, "mot2": 512, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmHarvestSafe": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 512, "mot2": 512, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmSortBluePlace": [
+      {"cmd": "Arm", "mot0": 420, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 420, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 512, "mot1": 512, "mot2": 512, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmSortYellowPlace": [
+      {"cmd": "Arm", "mot0": 600, "mot1": 500, "mot2": 620, "mot3": 520, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 600, "mot1": 650, "mot2": 760, "mot3": 520, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 512, "mot1": 512, "mot2": 512, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmSortSmallPlace": [
+      {"cmd": "Arm", "mot0": 510, "mot1": 540, "mot2": 660, "mot3": 540, "suck": 1, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 510, "mot1": 700, "mot2": 820, "mot3": 540, "suck": 0, "light": 0, "wait_timeout_s": 3.0},
+      {"cmd": "Arm", "mot0": 512, "mot1": 512, "mot2": 512, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
+    ],
+    "ArmSortSafe": [
+      {"cmd": "Arm", "mot0": 512, "mot1": 512, "mot2": 512, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
     ],
     "ArmIrrigationPickPrepare": [
       {"cmd": "Arm", "mot0": 512, "mot1": 500, "mot2": 620, "mot3": 512, "suck": 0, "light": 0, "wait_timeout_s": 3.0}
@@ -326,6 +367,73 @@
       "disappear_check_interval_s": 0.08,
       "same_target_iou": 0.25,
       "max_retry_per_target": 5
+    },
+    "HARVEST": {
+      "entry_distance": 7500,
+      "entry_confirm_frames": 3,
+      "target_count": 8,
+      "fruit_label_aliases": [
+        "blue",
+        "yellow"
+      ],
+      "fruit_type_aliases": {
+        "blue": ["blue"],
+        "yellow": ["yellow"]
+      },
+      "min_score": 0.5,
+      "fruit_roi": [0, 0, 640, 640],
+      "fruit_target_pose": [320, 260],
+      "cam_pose": "L",
+      "track_timeout_s": 4.0,
+      "max_missed_frames": 6,
+      "recover_pause_s": 0.06,
+      "recover_timeout_s": 0.5,
+      "advance_action": "HarvestAdvanceStep",
+      "advance_countdown": 0.2,
+      "action_countdown": 0.2,
+      "arm_action_countdown": 0.2,
+      "arm_actions": {
+        "blue": "ArmHarvestBlueToBin",
+        "yellow": "ArmHarvestYellowToBin",
+        "safe": "ArmHarvestSafe"
+      }
+    },
+    "SORT": {
+      "entry_distance": 8000,
+      "entry_confirm_frames": 3,
+      "total_count": 8,
+      "first_stage_count": 4,
+      "warehouse_label_aliases": [
+        "blue",
+        "yellow",
+        "warehouse"
+      ],
+      "small_warehouse_label_aliases": [
+        "small_warehouse",
+        "small_storage",
+        "mini_warehouse"
+      ],
+      "warehouse_type_aliases": {
+        "blue": ["blue"],
+        "yellow": ["yellow"]
+      },
+      "min_score": 0.5,
+      "warehouse_target_pose": [320, 260],
+      "small_warehouse_target_pose": [320, 260],
+      "cam_pose": "L",
+      "track_timeout_s": 4.0,
+      "max_missed_frames": 6,
+      "recover_pause_s": 0.06,
+      "recover_timeout_s": 0.5,
+      "move_to_small_warehouse_action": "SortMoveToSmallWarehouse",
+      "action_countdown": 0.2,
+      "arm_action_countdown": 0.2,
+      "arm_actions": {
+        "blue": "ArmSortBluePlace",
+        "yellow": "ArmSortYellowPlace",
+        "small": "ArmSortSmallPlace",
+        "safe": "ArmSortSafe"
+      }
     },
     "ORDER_DELIVERY": {
       "assume_task45_completed": true,

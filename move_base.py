@@ -4,11 +4,13 @@ import numpy as np
 
 from box_pid import BoxPidAligner
 from get_json import load_params
+from harvest_task import HarvestTaskExecutor
 from irrigation_task import IrrigationTaskExecutor
 from order_delivery_task import OrderDeliveryTaskExecutor
 from pest_confirm_task import PestConfirmTaskExecutor
 from place_delivery_task import PlaceDeliveryTaskExecutor
 from shooting_task import ShootingTaskExecutor
+from sort_task import SortTaskExecutor
 from shared_memory_manager import SharedMemoryManager
 from tool_func import (
     DEFAULT_SEED_LABEL_ALIASES,
@@ -210,7 +212,21 @@ class Task_func:
         self.task_shm.create_block(task_shm_key, size=640 * 640 * 3)
         task_cfg = load_params("motion.json").get("TASK_CONFIG", {})
         self.seeding_cfg = task_cfg.get("SEEDING", {})
+        self.harvest_cfg = task_cfg.get("HARVEST", {})
+        self.sort_cfg = task_cfg.get("SORT", {})
         self.irrigation_cfg = task_cfg.get("IRRIGATION", {})
+        self.harvest_executor_impl = HarvestTaskExecutor(
+            self.base,
+            task_client=self.task_client,
+            task_shm_key=self.task_shm_key,
+            tracking_callback=self.tracking_executor,
+        )
+        self.sort_executor_impl = SortTaskExecutor(
+            self.base,
+            task_client=self.task_client,
+            task_shm_key=self.task_shm_key,
+            tracking_callback=self.tracking_executor,
+        )
         self.irrigation_executor_impl = IrrigationTaskExecutor(
             self.base,
             ocr_reader=self.ocr_reader,
@@ -452,6 +468,12 @@ class Task_func:
     def task2_executor(self):
         return self.irrigation_executor()
 
+    def harvest_executor(self):
+        return self.harvest_executor_impl.run()
+
+    def sort_executor(self, harvest_results):
+        return self.sort_executor_impl.run(harvest_results)
+
     def pest_confirm_executor(self):
         return self.pest_confirm_executor_impl.run()
 
@@ -471,6 +493,16 @@ class Task_func:
         if self.task_client is None:
             return False
         return self.order_delivery_executor_impl.has_order_machine()
+
+    def has_fruit(self):
+        if self.task_client is None:
+            return False
+        return self.harvest_executor_impl.has_fruit()
+
+    def has_warehouse(self):
+        if self.task_client is None:
+            return False
+        return self.sort_executor_impl.has_warehouse()
 
     def has_unit(self, building="1"):
         if self.task_client is None:

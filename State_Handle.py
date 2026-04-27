@@ -42,6 +42,8 @@ class TaskManager:
         self.shooting_cfg = task_cfg.get("PEST_SHOOT", {})
         self.order_delivery_cfg = task_cfg.get("ORDER_DELIVERY", {})
         self.place_delivery_cfg = task_cfg.get("PLACE_DELIVERY", {})
+        self.harvest_cfg = task_cfg.get("HARVEST", {})
+        self.sort_cfg = task_cfg.get("SORT", {})
         self.irrigation_cfg = task_cfg.get("IRRIGATION", {})
         self.seed_entry_count = 0
         self.seed_entry_frames = int(self.seeding_cfg.get("entry_confirm_frames", 3))
@@ -66,7 +68,16 @@ class TaskManager:
         self.shooting_heading_delta_max = float(self.shooting_cfg.get("heading_delta_max", 110))
         self.shooting_completed = False
         self.last_angz = None
-        self.task45_completed = bool(self.order_delivery_cfg.get("assume_task45_completed", True))
+        self.harvest_entry_count = 0
+        self.harvest_entry_frames = int(self.harvest_cfg.get("entry_confirm_frames", 3))
+        self.harvest_entry_distance = float(self.harvest_cfg.get("entry_distance", 7500))
+        self.harvest_completed = False
+        self.harvest_results = []
+        self.sort_entry_count = 0
+        self.sort_entry_frames = int(self.sort_cfg.get("entry_confirm_frames", 3))
+        self.sort_entry_distance = float(self.sort_cfg.get("entry_distance", 8000))
+        self.sort_completed = False
+        self.task45_completed = self.harvest_completed and self.sort_completed
         self.order_delivery_entry_count = 0
         self.order_delivery_entry_frames = int(self.order_delivery_cfg.get("entry_confirm_frames", 3))
         self.order_delivery_entry_distance = float(self.order_delivery_cfg.get("entry_distance", 8000))
@@ -216,6 +227,42 @@ class TaskManager:
                         if (
                             self.current_task == "Lane"
                             and self.shooting_completed
+                            and (not self.harvest_completed)
+                        ):
+                            harvest_entry_active = (
+                                self.world_y > self.harvest_entry_distance
+                                and self._has_fruit()
+                            )
+                            if harvest_entry_active:
+                                self.harvest_entry_count += 1
+                                if self.harvest_entry_count >= self.harvest_entry_frames:
+                                    print("[TaskManager] Enter Harvest task.")
+                                    self.current_task = "Harvest"
+                                    self.harvest_entry_count = 0
+                            else:
+                                self.harvest_entry_count = 0
+
+                        if (
+                            self.current_task == "Lane"
+                            and self.harvest_completed
+                            and (not self.sort_completed)
+                        ):
+                            sort_entry_active = (
+                                self.world_y > self.sort_entry_distance
+                                and self._has_warehouse()
+                            )
+                            if sort_entry_active:
+                                self.sort_entry_count += 1
+                                if self.sort_entry_count >= self.sort_entry_frames:
+                                    print("[TaskManager] Enter Sort task.")
+                                    self.current_task = "Sort"
+                                    self.sort_entry_count = 0
+                            else:
+                                self.sort_entry_count = 0
+
+                        if (
+                            self.current_task == "Lane"
+                            and self.shooting_completed
                             and self.task45_completed
                             and (not self.order_delivery_completed)
                         ):
@@ -301,6 +348,26 @@ class TaskManager:
                 result = self.task_func.shooting_executor(self.pest_results)
                 self.shooting_completed = bool(result)
                 self.current_task = "Lane"
+            elif task == "Harvest":
+                result = self.task_func.harvest_executor()
+                target_count = int(self.harvest_cfg.get("target_count", 8))
+                if result and len(result) == target_count:
+                    self.harvest_results = result
+                    self.harvest_completed = True
+                    self.task45_completed = self.harvest_completed and self.sort_completed
+                    print(f"[TaskManager] Harvest results: {self.harvest_results}")
+                else:
+                    print("[TaskManager] Harvest failed, will retry from Lane.")
+                self.current_task = "Lane"
+            elif task == "Sort":
+                result = self.task_func.sort_executor(self.harvest_results)
+                self.sort_completed = bool(result)
+                self.task45_completed = self.harvest_completed and self.sort_completed
+                if result:
+                    print("[TaskManager] Sort task finished.")
+                else:
+                    print("[TaskManager] Sort failed, will retry from Lane.")
+                self.current_task = "Lane"
             elif task == "OrderDelivery":
                 result = self.task_func.order_delivery_executor()
                 self.order_delivery_completed = bool(result)
@@ -353,6 +420,24 @@ class TaskManager:
             return self.task_func.has_order_machine()
         except Exception as exc:
             print(f"[TaskManager] Order machine check failed: {exc}")
+            return False
+
+    def _has_fruit(self):
+        if not self.enable_aux_models or self.task_client is None:
+            return False
+        try:
+            return self.task_func.has_fruit()
+        except Exception as exc:
+            print(f"[TaskManager] Fruit check failed: {exc}")
+            return False
+
+    def _has_warehouse(self):
+        if not self.enable_aux_models or self.task_client is None:
+            return False
+        try:
+            return self.task_func.has_warehouse()
+        except Exception as exc:
+            print(f"[TaskManager] Warehouse check failed: {exc}")
             return False
 
     def _has_unit1(self):
