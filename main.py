@@ -7,12 +7,13 @@ from Process_manage import ProcessManager
 from SerialCommunicate import serial_server_process
 from State_Handle import TaskManager
 from infer_server_client import model_configs, serve_model_process
+from model_path_config import get_lane_model_path, get_model_profile
 from shared_memory_manager import SharedMemoryManager
 
 SERIAL_PHYSICAL_PATH = "2.2:1.0"
 LANE_CAMERA_DEVICE = "1-2.3:1.0"
 TASK_CAMERA_DEVICE = "1-2.1:1.0"
-LANE_MODEL_PATH = "/home/jetson/workspace_plus/vehicle_wbt_21th_lane/src/cnn_auto.nb"
+LANE_MODEL_PATH = get_lane_model_path()
 ENABLE_AUX_MODELS = True
 
 
@@ -20,6 +21,11 @@ def start_framework():
     print("=" * 60)
     print(" SmartCar 21 Lane Framework With OCR Support ")
     print("=" * 60)
+    print(f"[Main] Model profile: {get_model_profile()}")
+    print(f"[Main] Lane model path: {LANE_MODEL_PATH}")
+    task_cfg = next((cfg for cfg in model_configs if cfg.get("name") == "task"), None)
+    if task_cfg is not None:
+        print(f"[Main] Task model params: {task_cfg.get('params')}")
 
     shm_manager = SharedMemoryManager()
     shm_manager.create_block("shm_0", size=640 * 640 * 3)

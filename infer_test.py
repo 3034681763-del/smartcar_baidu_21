@@ -7,6 +7,7 @@ import time
 import cv2
 
 from camera_device_utils import open_camera_from_device_arg
+from model_path_config import get_task_model_path
 
 
 def ensure_paddle_jetson_importable(optional_path=""):
@@ -38,7 +39,7 @@ def build_parser():
     parser.add_argument("--height", type=int, default=480, help="Capture height")
     parser.add_argument("--fps", type=int, default=60, help="Capture FPS")
     parser.add_argument("--codec", default="MJPG", help="FOURCC codec")
-    parser.add_argument("--model", default="Global_V2", help="Task model name or path")
+    parser.add_argument("--model", default=get_task_model_path(), help="Task model name or path")
     parser.add_argument(
         "--paddle-jetson-path",
         default="",

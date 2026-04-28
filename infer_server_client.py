@@ -9,6 +9,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
+from model_path_config import get_task_model_path
+
 DEFAULT_PADDLE_JETSON_PATH = "/home/jetson/workspace/code_vehicle_wbt/paddle_jetson"
 
 
@@ -16,7 +18,7 @@ model_configs = [
     {
         "name": "task",
         "infer_type": "YoloeInfer",
-        "params": ["Global_V2"],
+        "params": [get_task_model_path()],
         "port": 5020,
         "img_size": [640, 640],
     },
