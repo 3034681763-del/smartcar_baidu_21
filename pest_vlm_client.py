@@ -5,14 +5,16 @@ import re
 import time
 
 import cv2
-import requests
+
+from env_loader import load_local_env
 
 
 QIANFAN_CHAT_URL = "https://qianfan.bj.baidubce.com/v2/chat/completions"
+AISTUDIO_BASE_URL = "https://aistudio.baidu.com/llm/lmapi/v3"
 
 
 class PestVlmClient:
-    """Baidu Qianfan multimodal client for one-card pest classification."""
+    """Multimodal client for one-card pest classification."""
 
     def __init__(
         self,
@@ -22,17 +24,34 @@ class PestVlmClient:
         timeout_s=8.0,
         max_retries=2,
         jpeg_quality=80,
+        provider=None,
     ):
-        self.api_key = api_key or os.environ.get("QIANFAN_API_KEY")
-        self.model = model or os.environ.get("QIANFAN_VLM_MODEL", "ernie-4.5-8k-preview")
-        self.api_url = api_url or os.environ.get("QIANFAN_CHAT_URL", QIANFAN_CHAT_URL)
+        load_local_env()
+        self.provider = self._normalize_provider(provider or os.environ.get("LLM_PROVIDER", "aistudio"))
+        if self.provider == "aistudio":
+            self.api_key = api_key or os.environ.get("AI_STUDIO_API_KEY") or os.environ.get("AISTUDIO_API_KEY")
+            self.model = (
+                model
+                or os.environ.get("AI_STUDIO_VLM_MODEL")
+                or os.environ.get("AISTUDIO_VLM_MODEL", "ernie-4.5-vl-28b-a3b")
+            )
+            self.api_url = (
+                api_url
+                or os.environ.get("AI_STUDIO_BASE_URL")
+                or os.environ.get("AISTUDIO_BASE_URL", AISTUDIO_BASE_URL)
+            )
+        else:
+            self.api_key = api_key or os.environ.get("QIANFAN_API_KEY")
+            self.model = model or os.environ.get("QIANFAN_VLM_MODEL", "ernie-4.5-8k-preview")
+            self.api_url = api_url or os.environ.get("QIANFAN_CHAT_URL", QIANFAN_CHAT_URL)
         self.timeout_s = float(timeout_s)
         self.max_retries = int(max_retries)
         self.jpeg_quality = int(jpeg_quality)
 
     def classify(self, image):
         if not self.api_key:
-            raise RuntimeError("QIANFAN_API_KEY is not set")
+            env_name = "AI_STUDIO_API_KEY" if self.provider == "aistudio" else "QIANFAN_API_KEY"
+            raise RuntimeError(f"{env_name} is not set")
         if image is None or getattr(image, "size", 0) == 0:
             raise ValueError("empty animal crop")
 
@@ -40,17 +59,7 @@ class PestVlmClient:
         last_error = None
         for attempt in range(1, self.max_retries + 1):
             try:
-                response = requests.post(
-                    self.api_url,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {self.api_key}",
-                    },
-                    json=payload,
-                    timeout=self.timeout_s,
-                )
-                response.raise_for_status()
-                content = response.json()["choices"][0]["message"]["content"]
+                content = self._request_content(payload)
                 return self._parse_result(content)
             except Exception as exc:
                 last_error = exc
@@ -58,6 +67,53 @@ class PestVlmClient:
                 time.sleep(0.5 * attempt)
 
         raise RuntimeError(f"Pest VLM classify failed: {last_error}")
+
+    @staticmethod
+    def _normalize_provider(provider):
+        provider = str(provider or "aistudio").strip().lower().replace("-", "_")
+        if provider in ("ai_studio", "aistudio"):
+            return "aistudio"
+        return "qianfan"
+
+    def _request_content(self, payload):
+        if self.provider == "aistudio":
+            return self._request_aistudio_content(payload)
+        return self._request_qianfan_content(payload)
+
+    def _request_qianfan_content(self, payload):
+        import requests
+
+        response = requests.post(
+            self.api_url,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            },
+            json=payload,
+            timeout=self.timeout_s,
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+
+    def _request_aistudio_content(self, payload):
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError("openai package is required for LLM_PROVIDER=aistudio") from exc
+
+        client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.api_url,
+            timeout=self.timeout_s,
+        )
+        response = client.chat.completions.create(
+            model=self.model,
+            messages=payload["messages"],
+            temperature=payload.get("temperature", 0.01),
+            max_completion_tokens=payload.get("max_tokens", 64),
+            stream=False,
+        )
+        return response.choices[0].message.content
 
     def _build_payload(self, image):
         image_b64 = self._encode_image(image)
@@ -89,7 +145,7 @@ class PestVlmClient:
             ],
             "stream": False,
             "max_tokens": 64,
-            "temperature": 0.0,
+            "temperature": 0.01,
         }
 
     def _encode_image(self, image):

@@ -3,10 +3,11 @@ import os
 import re
 import time
 
-import requests
+from env_loader import load_local_env
 
 
 QIANFAN_CHAT_URL = "https://qianfan.bj.baidubce.com/v2/chat/completions"
+AISTUDIO_BASE_URL = "https://aistudio.baidu.com/llm/lmapi/v3"
 
 
 class OrderAIClient:
@@ -19,16 +20,33 @@ class OrderAIClient:
         api_url=None,
         timeout_s=8.0,
         max_retries=2,
+        provider=None,
     ):
-        self.api_key = api_key or os.environ.get("QIANFAN_API_KEY")
-        self.model = model or os.environ.get("QIANFAN_TEXT_MODEL", "ernie-4.5-8k-preview")
-        self.api_url = api_url or os.environ.get("QIANFAN_CHAT_URL", QIANFAN_CHAT_URL)
+        load_local_env()
+        self.provider = self._normalize_provider(provider or os.environ.get("LLM_PROVIDER", "aistudio"))
+        if self.provider == "aistudio":
+            self.api_key = api_key or os.environ.get("AI_STUDIO_API_KEY") or os.environ.get("AISTUDIO_API_KEY")
+            self.model = (
+                model
+                or os.environ.get("AI_STUDIO_TEXT_MODEL")
+                or os.environ.get("AISTUDIO_TEXT_MODEL", "ernie-x1-turbo-32k")
+            )
+            self.api_url = (
+                api_url
+                or os.environ.get("AI_STUDIO_BASE_URL")
+                or os.environ.get("AISTUDIO_BASE_URL", AISTUDIO_BASE_URL)
+            )
+        else:
+            self.api_key = api_key or os.environ.get("QIANFAN_API_KEY")
+            self.model = model or os.environ.get("QIANFAN_TEXT_MODEL", "ernie-4.5-8k-preview")
+            self.api_url = api_url or os.environ.get("QIANFAN_CHAT_URL", QIANFAN_CHAT_URL)
         self.timeout_s = float(timeout_s)
         self.max_retries = int(max_retries)
 
     def parse_order(self, texts, valid_goods=None, valid_buildings=None, item_count=2):
         if not self.api_key:
-            raise RuntimeError("QIANFAN_API_KEY is not set")
+            env_name = "AI_STUDIO_API_KEY" if self.provider == "aistudio" else "QIANFAN_API_KEY"
+            raise RuntimeError(f"{env_name} is not set")
 
         payload = self._build_payload(
             texts,
@@ -39,17 +57,7 @@ class OrderAIClient:
         last_error = None
         for attempt in range(1, self.max_retries + 1):
             try:
-                response = requests.post(
-                    self.api_url,
-                    headers={
-                        "Content-Type": "application/json",
-                        "Authorization": f"Bearer {self.api_key}",
-                    },
-                    json=payload,
-                    timeout=self.timeout_s,
-                )
-                response.raise_for_status()
-                content = response.json()["choices"][0]["message"]["content"]
+                content = self._request_content(payload)
                 return self._parse_result(
                     content,
                     valid_goods=valid_goods,
@@ -62,6 +70,53 @@ class OrderAIClient:
                 time.sleep(0.5 * attempt)
 
         raise RuntimeError(f"Order AI parse failed: {last_error}")
+
+    @staticmethod
+    def _normalize_provider(provider):
+        provider = str(provider or "aistudio").strip().lower().replace("-", "_")
+        if provider in ("ai_studio", "aistudio"):
+            return "aistudio"
+        return "qianfan"
+
+    def _request_content(self, payload):
+        if self.provider == "aistudio":
+            return self._request_aistudio_content(payload)
+        return self._request_qianfan_content(payload)
+
+    def _request_qianfan_content(self, payload):
+        import requests
+
+        response = requests.post(
+            self.api_url,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.api_key}",
+            },
+            json=payload,
+            timeout=self.timeout_s,
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+
+    def _request_aistudio_content(self, payload):
+        try:
+            from openai import OpenAI
+        except ImportError as exc:
+            raise RuntimeError("openai package is required for LLM_PROVIDER=aistudio") from exc
+
+        client = OpenAI(
+            api_key=self.api_key,
+            base_url=self.api_url,
+            timeout=self.timeout_s,
+        )
+        response = client.chat.completions.create(
+            model=self.model,
+            messages=payload["messages"],
+            temperature=payload.get("temperature", 0.01),
+            max_completion_tokens=payload.get("max_tokens", 256),
+            stream=False,
+        )
+        return response.choices[0].message.content
 
     def _build_payload(self, texts, valid_goods=None, valid_buildings=None, item_count=2):
         if not isinstance(texts, (list, tuple)):
@@ -89,7 +144,7 @@ class OrderAIClient:
             "messages": [{"role": "user", "content": prompt}],
             "stream": False,
             "max_tokens": 256,
-            "temperature": 0.0,
+            "temperature": 0.01,
         }
 
     @staticmethod
@@ -136,6 +191,7 @@ class OrderAIClient:
         text = str(value).strip().upper()
         if not text:
             return None
-        text = text.replace("單", "单")
+        text = text.replace("一单元", "1").replace("二单元", "2")
+        text = text.replace("單", "单").replace("单元", "")
         digits = "".join(ch for ch in text if ch.isdigit())
         return digits or text
