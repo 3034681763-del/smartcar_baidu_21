@@ -550,10 +550,10 @@ class Task_func:
         self,
         target_pose=(320, 240),
         cam_pose="L",
-        timeout_s=5.0,
-        max_missed_frames=5,
+        timeout_s=None,
+        max_missed_frames=None,
         recover_pause_s=0.05,
-        recover_timeout_s=0.5,
+        recover_timeout_s=None,
         debug_hook=None,
         selector=None,
         selector_kwargs=None,
@@ -599,7 +599,7 @@ class Task_func:
                         self.base.MOD_STOP()
                         print(f"[Tracking] Recovery timeout after {missed_frames} missed frames.")
                         return False
-                if missed_frames >= max_missed_frames:
+                if max_missed_frames is not None and missed_frames >= max_missed_frames:
                     self.tracking_aligner.reset()
                     self.base.MOD_STOP()
                     print(f"[Tracking] No target box for {missed_frames} frames.")

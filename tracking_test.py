@@ -34,12 +34,17 @@ def build_parser():
     parser.add_argument("--target-x", type=float, default=320.0, help="Tracking target x")
     parser.add_argument("--target-y", type=float, default=240.0, help="Tracking target y")
     parser.add_argument("--cam-pose", default="L", choices=["L", "R", "shoot"], help="Tracking pose")
-    parser.add_argument("--timeout", type=float, default=5.0, help="Tracking timeout")
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=0.0,
+        help="Tracking timeout in seconds. Use 0 to disable timeout and wait until aligned.",
+    )
     parser.add_argument(
         "--max-missed-frames",
         type=int,
-        default=5,
-        help="Tracking stops only after this many consecutive missing frames",
+        default=0,
+        help="Tracking stops only after this many consecutive missing frames. Use 0 to disable.",
     )
     return parser
 
@@ -194,16 +199,21 @@ def main():
         print(f"Task camera: {args.task_device}")
         print(f"Target pose: ({args.target_x}, {args.target_y})")
         print(f"cam_pose:    {args.cam_pose}")
-        print(f"timeout:     {args.timeout:.2f}s")
-        print(f"missed max:  {args.max_missed_frames}")
+        timeout_s = args.timeout if args.timeout and args.timeout > 0 else None
+        max_missed_frames = args.max_missed_frames if args.max_missed_frames and args.max_missed_frames > 0 else None
+
+        timeout_text = "disabled" if timeout_s is None else f"{timeout_s:.2f}s"
+        missed_text = "disabled" if max_missed_frames is None else str(max_missed_frames)
+        print(f"timeout:     {timeout_text}")
+        print(f"missed max:  {missed_text}")
         print("=" * 60)
         time.sleep(1.0)
 
         result = task.tracking_executor(
             target_pose=(args.target_x, args.target_y),
             cam_pose=args.cam_pose,
-            timeout_s=args.timeout,
-            max_missed_frames=args.max_missed_frames,
+            timeout_s=timeout_s,
+            max_missed_frames=max_missed_frames,
             debug_hook=update_overlay,
         )
         print(f"[tracking_test] result={result}")
