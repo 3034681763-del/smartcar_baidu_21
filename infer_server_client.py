@@ -70,14 +70,24 @@ def recv_pickle(conn: socket.socket):
 class ModelManager:
     def __init__(self, cfg):
         ensure_paddle_jetson_importable()
-        from paddle_jetson import OCRReco, YoloeInfer
+        original_argv = sys.argv[:]
+        sys.argv = [sys.argv[0]]
+        try:
+            from paddle_jetson import OCRReco, YoloeInfer
+        finally:
+            sys.argv = original_argv
 
         model_map = {
             "OCRReco": OCRReco,
             "YoloeInfer": YoloeInfer,
         }
         infer_cls = model_map[cfg["infer_type"]]
-        self.model = infer_cls(*cfg["params"])
+        original_argv = sys.argv[:]
+        sys.argv = [sys.argv[0]]
+        try:
+            self.model = infer_cls(*cfg["params"])
+        finally:
+            sys.argv = original_argv
 
         if "img_size" in cfg:
             h, w = cfg["img_size"]
