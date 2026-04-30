@@ -20,6 +20,7 @@ from tool_func import (
     has_all_seed_targets,
     get_only_box,
     judge_seed_layout,
+    select_detection_box,
 )
 
 
@@ -557,6 +558,10 @@ class Task_func:
         debug_hook=None,
         selector=None,
         selector_kwargs=None,
+        selector_strategy="biggest",
+        target_labels=None,
+        min_score=0.35,
+        edge_margin=5,
     ):
         if self.task_client is None:
             print("[Task_func] Tracking client is not configured.")
@@ -567,8 +572,19 @@ class Task_func:
         start_time = time.time()
         missed_frames = 0
         recover_start = None
-        selector = selector or get_only_box
-        selector_kwargs = selector_kwargs or {}
+        if selector is None:
+            selector = select_detection_box
+            selector_kwargs = {
+                "strategy": selector_strategy,
+                "target_labels": target_labels,
+                "min_score": min_score,
+                "target_pose": target_pose,
+                "edge_margin": edge_margin,
+                "frame_width": 640,
+                "frame_height": 640,
+            }
+        else:
+            selector_kwargs = selector_kwargs or {}
 
         while True:
             if timeout_s is not None and time.time() - start_time > timeout_s:
@@ -580,6 +596,8 @@ class Task_func:
                 return False
 
             detections = self.task_client(self.task_shm_key, (640, 640, 3), np.uint8)
+            if selector is select_detection_box:
+                selector_kwargs["target_pose"] = target_pose
             target_box = selector(detections, **selector_kwargs)
             if target_box is None or getattr(target_box, "center", None) is None:
                 missed_frames += 1

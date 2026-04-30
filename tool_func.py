@@ -222,6 +222,77 @@ def get_biggest_box(detections, target_labels=None, min_score=0.5):
     return max(filtered, key=_box_area)
 
 
+def is_complete_box(detection, edge_margin=5, frame_width=640, frame_height=640):
+    return _bbox_center_margin_ok(
+        detection,
+        edge_margin=edge_margin,
+        frame_width=frame_width,
+        frame_height=frame_height,
+    )
+
+
+def get_complete_boxes(
+    detections,
+    target_labels=None,
+    min_score=0.5,
+    edge_margin=5,
+    frame_width=640,
+    frame_height=640,
+):
+    filtered = _filter_detections(detections, target_labels=target_labels, min_score=min_score)
+    return [
+        det for det in filtered
+        if is_complete_box(
+            det,
+            edge_margin=edge_margin,
+            frame_width=frame_width,
+            frame_height=frame_height,
+        )
+    ]
+
+
+def get_biggest_complete_box(
+    detections,
+    target_labels=None,
+    min_score=0.5,
+    edge_margin=5,
+    frame_width=640,
+    frame_height=640,
+):
+    complete = get_complete_boxes(
+        detections,
+        target_labels=target_labels,
+        min_score=min_score,
+        edge_margin=edge_margin,
+        frame_width=frame_width,
+        frame_height=frame_height,
+    )
+    if not complete:
+        return None
+    return max(complete, key=_box_area)
+
+
+def get_leftmost_complete_box(
+    detections,
+    target_labels=None,
+    min_score=0.5,
+    edge_margin=5,
+    frame_width=640,
+    frame_height=640,
+):
+    complete = get_complete_boxes(
+        detections,
+        target_labels=target_labels,
+        min_score=min_score,
+        edge_margin=edge_margin,
+        frame_width=frame_width,
+        frame_height=frame_height,
+    )
+    if not complete:
+        return None
+    return min(complete, key=lambda det: float(getattr(det, "bbox", (0, 0, 0, 0))[0]))
+
+
 def get_closest_box(detections, target_pose=(320, 240), target_labels=None, min_score=0.5):
     filtered = _filter_detections(detections, target_labels=target_labels, min_score=min_score)
     if not filtered:
@@ -355,6 +426,50 @@ def get_animal_box_in_roi(
         filtered,
         key=lambda det: math.hypot(float(det.center[0]) - float(tx), float(det.center[1]) - float(ty)),
     )
+
+
+def select_detection_box(
+    detections,
+    strategy="biggest",
+    target_labels=None,
+    min_score=0.5,
+    target_pose=(320, 240),
+    edge_margin=5,
+    frame_width=640,
+    frame_height=640,
+):
+    if strategy == "first":
+        return get_only_box(detections, min_score=min_score)
+    if strategy == "biggest":
+        return get_biggest_box(detections, target_labels=target_labels, min_score=min_score)
+    if strategy == "biggest-complete":
+        return get_biggest_complete_box(
+            detections,
+            target_labels=target_labels,
+            min_score=min_score,
+            edge_margin=edge_margin,
+            frame_width=frame_width,
+            frame_height=frame_height,
+        )
+    if strategy == "leftmost":
+        return get_leftmost_box(detections, label_aliases=target_labels, min_score=min_score)
+    if strategy == "leftmost-complete":
+        return get_leftmost_complete_box(
+            detections,
+            target_labels=target_labels,
+            min_score=min_score,
+            edge_margin=edge_margin,
+            frame_width=frame_width,
+            frame_height=frame_height,
+        )
+    if strategy == "closest":
+        return get_closest_box(
+            detections,
+            target_pose=target_pose,
+            target_labels=target_labels,
+            min_score=min_score,
+        )
+    raise ValueError(f"Unknown detection box selection strategy: {strategy}")
 
 
 def crop_detection_with_padding(image, detection, pad=32):
