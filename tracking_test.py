@@ -14,6 +14,7 @@ from infer_server_client import InferClient1, model_configs, serve_model_process
 from model_path_config import get_lane_model_path, get_model_profile
 from move_base import Base_func, Task_func
 from shared_memory_manager import SharedMemoryManager
+from test_shutdown import ShutdownController
 from tool_func import select_detection_box
 
 
@@ -113,7 +114,7 @@ def start_main_like_runtime(args):
     publish_queue = multiprocessing.Queue()
     action_done_event = multiprocessing.Event()
 
-    mgr = ProcessManager()
+    mgr = ProcessManager(setup_signal_handlers=False)
     mgr.add_process(
         target=serial_server_process,
         args=(args.physical_path, args.baudrate, request_queue, publish_queue, action_done_event),
@@ -138,9 +139,11 @@ def start_main_like_runtime(args):
 
 def main():
     multiprocessing.freeze_support()
+    shutdown = ShutdownController("tracking_test").install()
     args = build_parser().parse_args()
     task_cfg = next(cfg for cfg in model_configs if cfg["name"] == "task")
     shm_manager, mgr, request_queue, publish_queue, action_done_event = start_main_like_runtime(args)
+    shutdown.add_callback(action_done_event.set)
     task_client = None
     tracking_result = {"done": False, "ok": False}
 
@@ -204,7 +207,7 @@ def main():
         missed_frames = 0
         last_label_log_time = 0.0
 
-        while True:
+        while not shutdown.is_set():
             frame = shm_manager.read_image("shm_task", (640, 640, 3), np.uint8)
             detections = task_client("shm_task", (640, 640, 3), np.uint8)
             frame_count += 1
@@ -284,20 +287,24 @@ def main():
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 print("[tracking_test] Exit requested by user.")
+                shutdown.request()
                 break
             if tracking_result["done"]:
                 print(f"[tracking_test] result={tracking_result['ok']}")
                 break
-            time.sleep(0.02)
+            shutdown.wait(0.02)
     except KeyboardInterrupt:
-        print("[tracking_test] Stopped by user.")
+        shutdown.request()
     finally:
+        action_done_event.set()
         if task_client is not None:
             task_client.close()
         mgr.terminate_all()
         shm_manager.release_all()
         cv2.destroyAllWindows()
 
+    if shutdown.is_set() and not tracking_result["done"]:
+        return 0
     return 0 if tracking_result["ok"] else 1
 
 

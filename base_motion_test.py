@@ -6,6 +6,7 @@ from queue import Empty, Queue
 
 from move_base import Base_func
 from SerialCommunicate import SerialServer
+from test_shutdown import ShutdownController
 
 
 DEFAULT_SEQUENCE = [
@@ -63,11 +64,14 @@ def build_parser():
 
 
 def main():
+    shutdown = ShutdownController("base_motion_test").install()
     args = build_parser().parse_args()
     request_queue = Queue()
     publish_queue = Queue()
     action_done_event = threading.Event()
     ack_stop_event = threading.Event()
+    shutdown.add_callback(action_done_event.set)
+    shutdown.add_callback(ack_stop_event.set)
 
     server = SerialServer(
         serial_path=args.physical_path,
@@ -105,15 +109,18 @@ def main():
 
     try:
         for action_key, countdown in sequence:
+            if shutdown.is_set():
+                break
             print(f"[base_motion_test] Running -> {action_key}")
             if not base.execute_base_motion(action_key, countdown=countdown):
                 print(f"[base_motion_test] Unknown action: {action_key}")
                 return 1
-            time.sleep(0.1)
+            shutdown.wait(0.1)
     except KeyboardInterrupt:
-        print("[base_motion_test] Stopped by user.")
+        shutdown.request()
         return 0
     finally:
+        action_done_event.set()
         ack_stop_event.set()
         ack_thread.join(timeout=1.0)
         base.MOD_STOP()

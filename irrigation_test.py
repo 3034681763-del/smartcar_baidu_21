@@ -9,6 +9,8 @@ import time
 from multiprocessing import shared_memory
 from queue import Queue
 
+from test_shutdown import ShutdownController
+
 class FakeOCRReader:
     def __init__(self, tower_needs):
         self._tower_needs = list(tower_needs)
@@ -163,6 +165,7 @@ def build_temp_motion_file(args):
 
 
 def main():
+    shutdown = ShutdownController("irrigation_test").install()
     args = build_parser().parse_args()
     multiprocessing.freeze_support()
     from move_base import Base_func, Task_func
@@ -195,7 +198,7 @@ def main():
             from Process_manage import ProcessManager
             from infer_server_client import InferClient1, model_configs, serve_model_process
 
-            manager = ProcessManager()
+            manager = ProcessManager(setup_signal_handlers=False)
             manager.add_process(
                 target=publish_task_camera_only,
                 args=("shm_task", args.task_device),
@@ -234,6 +237,8 @@ def main():
             print("Task camera:   disabled (dry-run mode)")
         print("=" * 60)
 
+        if shutdown.is_set():
+            return 0
         result = task.irrigation_executor(supply_counts=supply_counts)
         runtime = task.irrigation_executor_impl.runtime
         print(f"[irrigation_test] result={result}")
@@ -244,7 +249,7 @@ def main():
             print(f"[irrigation_test] completed={runtime.completed}")
         return 0 if result else 1
     except KeyboardInterrupt:
-        print("[irrigation_test] Stopped by user.")
+        shutdown.request()
         return 0
     finally:
         base = None

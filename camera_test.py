@@ -5,6 +5,7 @@ import time
 import cv2
 
 from camera_device_utils import open_camera_from_device_arg
+from test_shutdown import ShutdownController
 
 
 def build_parser():
@@ -29,6 +30,7 @@ def build_parser():
 
 
 def main():
+    shutdown = ShutdownController("camera_test").install()
     args = build_parser().parse_args()
     if len(args.codec) != 4:
         raise ValueError("FOURCC codec must be exactly 4 characters")
@@ -75,7 +77,7 @@ def main():
     frame_count = 0
     start_time = time.time()
     try:
-        while True:
+        while not shutdown.is_set():
             lane_ok, lane_frame = lane_cap.read()
             if not lane_ok:
                 print("[camera_test] Lane camera frame read failed.")
@@ -117,7 +119,10 @@ def main():
 
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 print("[camera_test] Exit requested by user.")
+                shutdown.request()
                 break
+    except KeyboardInterrupt:
+        shutdown.request()
     finally:
         lane_cap.release()
         if task_cap is not None:

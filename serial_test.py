@@ -3,6 +3,7 @@ import argparse
 import time
 
 from SerialCommunicate import SerialCommunicate
+from test_shutdown import ShutdownController
 
 
 def build_parser():
@@ -50,6 +51,7 @@ def build_parser():
 
 
 def main():
+    shutdown = ShutdownController("serial_test").install()
     args = build_parser().parse_args()
     uart = SerialCommunicate(args.physical_path, args.baudrate)
     if uart.ser is None:
@@ -76,7 +78,7 @@ def main():
         next_send_time = 0.0
 
         last_payload = None
-        while True:
+        while not shutdown.is_set():
             now = time.time()
             should_send = False
             if args.send_lane or args.send_pose:
@@ -108,9 +110,9 @@ def main():
             if payload and (args.print_all or payload != last_payload):
                 print(f"[serial_test] RX -> {payload}")
                 last_payload = dict(payload)
-            time.sleep(0.02)
+            shutdown.wait(0.02)
     except KeyboardInterrupt:
-        print("[serial_test] Stopped by user.")
+        shutdown.request()
         return 0
     finally:
         uart.close()

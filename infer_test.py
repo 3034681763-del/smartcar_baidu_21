@@ -11,6 +11,7 @@ from Process_manage import ProcessManager
 from infer_server_client import InferClient1, model_configs, serve_model_process
 from model_path_config import get_lane_model_path, get_model_profile
 from shared_memory_manager import SharedMemoryManager
+from test_shutdown import ShutdownController
 
 
 def build_parser():
@@ -65,7 +66,7 @@ def start_main_like_runtime(args):
     shm_manager.create_block("shm_lane", size=8)
     shm_manager.create_block("shm_crop", size=640 * 640 * 3)
 
-    mgr = ProcessManager()
+    mgr = ProcessManager(setup_signal_handlers=False)
     mgr.add_process(
         target=vidpub_course,
         args=(
@@ -91,6 +92,7 @@ def start_main_like_runtime(args):
 
 def main():
     multiprocessing.freeze_support()
+    shutdown = ShutdownController("infer_test").install()
     args = build_parser().parse_args()
     task_cfg = next(cfg for cfg in model_configs if cfg["name"] == "task")
     shm_manager, mgr = start_main_like_runtime(args)
@@ -113,7 +115,7 @@ def main():
         fps_start = time.time()
         last_label_log_time = 0.0
 
-        while True:
+        while not shutdown.is_set():
             frame = shm_manager.read_image("shm_task", (640, 640, 3), np.uint8)
             detections = task_client("shm_task", (640, 640, 3), np.uint8)
             frame_count += 1
@@ -145,10 +147,11 @@ def main():
             cv2.imshow("infer_test", frame)
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 print("[infer_test] Exit requested by user.")
+                shutdown.request()
                 break
-            time.sleep(0.02)
+            shutdown.wait(0.02)
     except KeyboardInterrupt:
-        print("[infer_test] Stopped by user.")
+        shutdown.request()
     finally:
         if task_client is not None:
             task_client.close()
