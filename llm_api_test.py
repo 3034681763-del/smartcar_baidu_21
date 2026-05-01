@@ -44,6 +44,11 @@ def build_parser():
     parser.add_argument("--skip-order", action="store_true", help="Skip order OCR + LLM test.")
     parser.add_argument("--skip-pest", action="store_true", help="Skip pest detection + VLM test.")
     parser.add_argument(
+        "--use-pest-detection-crop",
+        action="store_true",
+        help="Enable animal detection + crop before VLM. Default is to send the full captured frame.",
+    )
+    parser.add_argument(
         "--use-existing-services",
         action="store_true",
         help="Do not start model processes; connect to already running task/word services.",
@@ -205,33 +210,41 @@ def test_pest_chain(frame, args, shm_manager, task_client):
     print("=" * 60)
     print("[Full LLM Test] Pest chain")
 
-    detections = task_client(TASK_SHM_KEY, FRAME_SHAPE, np.uint8)
-    box = get_animal_box_in_roi(
-        detections,
-        roi=cfg.get("confirm_roi"),
-        target_pose=tuple(cfg.get("align_target_pose", [320, 260])),
-        label_aliases=cfg.get("animal_label_aliases", DEFAULT_ANIMAL_LABEL_ALIASES),
-        min_score=float(cfg.get("min_score", 0.5)),
-    )
-    if box is None:
-        labels = [getattr(det, "label", None) for det in (detections or [])]
-        raise RuntimeError(f"no animal box detected; labels={labels}")
+    if args.use_pest_detection_crop:
+        print("[Full LLM Test] Pest mode: detection crop enabled")
+        detections = task_client(TASK_SHM_KEY, FRAME_SHAPE, np.uint8)
+        box = get_animal_box_in_roi(
+            detections,
+            roi=cfg.get("confirm_roi"),
+            target_pose=tuple(cfg.get("align_target_pose", [320, 260])),
+            label_aliases=cfg.get("animal_label_aliases", DEFAULT_ANIMAL_LABEL_ALIASES),
+            min_score=float(cfg.get("min_score", 0.5)),
+        )
+        if box is None:
+            labels = [getattr(det, "label", None) for det in (detections or [])]
+            raise RuntimeError(f"no animal box detected; labels={labels}")
 
-    print(
-        "[Full LLM Test] Animal detection: "
-        f"label={getattr(box, 'label', None)} score={float(getattr(box, 'score', 0.0)):.3f} "
-        f"bbox={tuple(getattr(box, 'bbox', ())) }"
-    )
-    crop = crop_detection_with_padding(
-        frame,
-        box,
-        pad=int(cfg.get("crop_pad", 32)),
-    )
-    if crop is None:
-        raise RuntimeError("failed to crop animal detection")
+        print(
+            "[Full LLM Test] Animal detection: "
+            f"label={getattr(box, 'label', None)} score={float(getattr(box, 'score', 0.0)):.3f} "
+            f"bbox={tuple(getattr(box, 'bbox', ())) }"
+        )
+        vlm_input = crop_detection_with_padding(
+            frame,
+            box,
+            pad=int(cfg.get("crop_pad", 32)),
+        )
+        if vlm_input is None:
+            raise RuntimeError("failed to crop animal detection")
+    else:
+        print("[Full LLM Test] Pest mode: full-frame VLM input (default)")
+        # Keep the original detection-and-crop path available behind
+        # --use-pest-detection-crop, but default to the full captured frame
+        # so animal VLM testing does not depend on detector labels.
+        vlm_input = frame
 
     client = PestVlmClient(timeout_s=args.timeout, max_retries=args.retries)
-    result = client.classify(crop)
+    result = client.classify(vlm_input)
     print("[Full LLM Test] Pest VLM result:")
     print(json.dumps({"result": result}, ensure_ascii=False, indent=2))
     return result
