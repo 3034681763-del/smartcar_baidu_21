@@ -16,6 +16,10 @@ from move_base import Base_func, Task_func
 from shared_memory_manager import SharedMemoryManager
 from test_shutdown import ShutdownController
 from tool_func import select_detection_box
+from get_json import load_params
+
+
+TRACKING_PID_PROFILES = tuple(load_params("param.json").get("TRACKING_PID", {}).keys())
 
 
 def build_parser():
@@ -39,6 +43,12 @@ def build_parser():
     parser.add_argument("--baudrate", type=int, default=115200, help="Serial baudrate")
     parser.add_argument("--target-x", type=float, default=320.0, help="Tracking target x")
     parser.add_argument("--target-y", type=float, default=240.0, help="Tracking target y")
+    parser.add_argument(
+        "--pid-profile",
+        default="Fast",
+        choices=TRACKING_PID_PROFILES,
+        help="Tracking PID preset profile.",
+    )
     parser.add_argument(
         "--target-label",
         default=None,
@@ -161,6 +171,7 @@ def main():
     print(f"Task params:   {task_cfg.get('params')}")
     print(f"Serial path:   {args.physical_path}")
     print(f"Target pose:   {target_pose}")
+    print(f"PID profile:   {args.pid_profile}")
     print(f"Target label:  {args.target_label or 'any model label'}")
     print(f"Selector:      {args.selector}")
     print(f"Min score:     {args.min_score:.2f}")
@@ -183,6 +194,7 @@ def main():
             task_shm_key="shm_task",
             task_client=task_client,
         )
+        task.set_tracking_pid_profile(args.pid_profile)
 
         def run_tracking():
             ok = task.tracking_executor(

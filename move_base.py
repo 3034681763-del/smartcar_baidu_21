@@ -267,6 +267,10 @@ class Task_func:
             tracking_callback=self.tracking_executor,
         )
 
+    def set_tracking_pid_profile(self, profile_name):
+        self.tracking_aligner = BoxPidAligner(params=profile_name)
+        print(f"[Task_func] Tracking PID profile -> {profile_name}")
+
     def task1_executor(self):
         return self.seeding_executor()
 
