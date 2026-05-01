@@ -248,6 +248,17 @@ class SerialCommunicate:
         print(f"[UART TX] sysmode flag={flag}")
         print(f"[UART TX HEX] {self.packet_to_hex(packet)}")
 
+    def send_align_done(self):
+        if self.ser is None:
+            return
+
+        packet = bytes([0x42, 0x06, 0x00, 0x3C])
+        for repeat_index in range(10):
+            self.ser.write(packet)
+            print(f"[UART TX] align done {repeat_index + 1}/10")
+            print(f"[UART TX HEX] {self.packet_to_hex(packet)}")
+            time.sleep(0.02)
+
     def close(self):
         self._running = False
         thread = self.thread_recv
@@ -316,6 +327,8 @@ class SerialServer:
                     )
                 elif cmd_type == "SysMode":
                     self.serial_comm.send_mode_flag(req["flag"])
+                elif cmd_type == "AlignDone":
+                    self.serial_comm.send_align_done()
             except Exception as exc:
                 print(f"[SerialServer] Request error: {exc}")
 

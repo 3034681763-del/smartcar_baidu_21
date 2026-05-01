@@ -87,6 +87,11 @@ class Base_func:
         if self.request_queue is not None:
             self.request_queue.put(data)
 
+    def MOD_ALIGN_DONE(self):
+        data = {"cmd": "AlignDone"}
+        if self.request_queue is not None:
+            self.request_queue.put(data)
+
     def send_motion_command(self, data):
         if self.request_queue is not None:
             self.request_queue.put(data)
@@ -655,7 +660,7 @@ class Task_func:
                         debug=debug,
                         missed_frames=missed_frames,
                     )
-                self.base.MOD_STOP()
+                self.base.MOD_ALIGN_DONE()
                 self.tracking_aligner.reset()
                 print("[Tracking] Location OK")
                 return True
