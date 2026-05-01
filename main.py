@@ -1,5 +1,7 @@
 import multiprocessing
+import signal
 import sys
+import threading
 import time
 
 from Cam_cap import vidpub_course
@@ -18,6 +20,29 @@ ENABLE_AUX_MODELS = True
 
 
 def start_framework():
+    shutdown_event = threading.Event()
+    shutdown_started = threading.Event()
+    brain = None
+    mgr = None
+    shm_manager = None
+    action_done_event = None
+
+    def request_shutdown(signum=None, frame=None):
+        del frame
+        if shutdown_started.is_set():
+            return
+        shutdown_started.set()
+        if signum is None:
+            print("\n[Main] Shutdown requested, stopping framework...")
+        else:
+            print(f"\n[Main] Signal {signum} received, stopping framework...")
+        shutdown_event.set()
+        if action_done_event is not None:
+            action_done_event.set()
+
+    signal.signal(signal.SIGINT, request_shutdown)
+    signal.signal(signal.SIGTERM, request_shutdown)
+
     print("=" * 60)
     print(" SmartCar 21 Lane Framework With OCR Support ")
     print("=" * 60)
@@ -36,7 +61,7 @@ def start_framework():
     publish_queue = multiprocessing.Queue()
     action_done_event = multiprocessing.Event()
 
-    mgr = ProcessManager()
+    mgr = ProcessManager(setup_signal_handlers=False)
 
     print("[Main] Starting UART service process...")
     mgr.add_process(
@@ -72,12 +97,21 @@ def start_framework():
     brain.start()
 
     try:
-        while True:
-            time.sleep(1.0)
+        while not shutdown_event.wait(timeout=1.0):
+            pass
     except KeyboardInterrupt:
-        print("\n[Main] Ctrl+C received, shutting down...")
-        brain.cleanup()
-        mgr.terminate_all()
+        request_shutdown(signal.SIGINT)
+    finally:
+        print("[Main] Cleaning up...")
+        if action_done_event is not None:
+            action_done_event.set()
+        if brain is not None:
+            brain.cleanup()
+        if mgr is not None:
+            mgr.terminate_all()
+        if shm_manager is not None:
+            shm_manager.release_all()
+        print("[Main] Shutdown complete.")
         sys.exit(0)
 
 

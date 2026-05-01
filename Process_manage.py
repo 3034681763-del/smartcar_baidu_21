@@ -1,89 +1,99 @@
-import psutil
+import atexit
+import multiprocessing
 import os
+import signal
 import subprocess
 import sys
+from typing import Callable
 
-import multiprocessing
-import signal
-import atexit
-import time
-from typing import Callable, List, Tuple
+import psutil
 
-# brief：子进程管理，在主进程退出时，通知子进程关闭，如果3s没有关闭，强制杀死
-# 注意使用时，子进程函数的第一个参数必须是multiprocessing.Event
 
 class ProcessManager:
-    def __init__(self):
+    """Manage child processes whose first argument is a multiprocessing.Event."""
+
+    def __init__(self, setup_signal_handlers=True):
         self.processes = []
-        self._setup_exit_handlers()
+        self._terminating = False
+        self._setup_exit_handlers(setup_signal_handlers=setup_signal_handlers)
 
     def add_process(self, target: Callable, args: tuple = ()):
-        """
-        添加子进程任务，target 函数的第一个参数必须是 stop_event
-        """
         stop_event = multiprocessing.Event()
         full_args = (stop_event,) + args
-        p = multiprocessing.Process(target=target, args=full_args)
-        # 不使用 daemon 模式，避免子进程功能受限
-        self.processes.append((p, stop_event))
+        process = multiprocessing.Process(target=target, args=full_args)
+        self.processes.append((process, stop_event))
 
     def start_all(self):
-        for p, _ in self.processes:
-            p.start()
+        for process, _ in self.processes:
+            process.start()
 
-    def terminate_all(self):
-        for p, stop_event in self.processes:
-            if p.is_alive():
-                stop_event.set()  # 通知子进程退出
-        for p, _ in self.processes:
-            p.join(timeout=3)  # 给子进程最多3秒收尾
-            if p.is_alive():
-                p.terminate()  # 仍未退出则强制杀掉
-                p.join()
+    def terminate_all(self, graceful_timeout=3.0):
+        if self._terminating:
+            return
+        self._terminating = True
 
-    def _setup_exit_handlers(self):
+        for process, stop_event in self.processes:
+            if process.is_alive():
+                stop_event.set()
+
+        for process, _ in self.processes:
+            if not process.is_alive():
+                continue
+            process.join(timeout=graceful_timeout)
+            if process.is_alive():
+                print(f"[ProcessManager] Force terminating process pid={process.pid}")
+                process.terminate()
+                process.join(timeout=1.0)
+                if process.is_alive():
+                    print(f"[ProcessManager] Force killing process pid={process.pid}")
+                    process.kill()
+                    process.join(timeout=1.0)
+
+    def _setup_exit_handlers(self, setup_signal_handlers=True):
         atexit.register(self.terminate_all)
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
+        if setup_signal_handlers:
+            signal.signal(signal.SIGINT, self._signal_handler)
+            signal.signal(signal.SIGTERM, self._signal_handler)
 
     def _signal_handler(self, signum, frame):
         print(f"\n[ProcessManager] Caught signal {signum}, terminating subprocesses...")
         self.terminate_all()
-        exit(0)
+        sys.exit(0)
+
 
 def get_python_processes():
     python_processes = []
-    for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
+    for proc in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
-            if 'python' in proc.info['name'].lower():
-                cmdline = proc.info['cmdline']
+            if "python" in proc.info["name"].lower():
+                cmdline = proc.info["cmdline"]
                 if len(cmdline) > 1:
                     script_path = cmdline[1]
-                    python_processes.append((proc.info['pid'], script_path))
+                    python_processes.append((proc.info["pid"], script_path))
         except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
             pass
     return python_processes
 
-"""前台开启进程,输出会打印在终端中"""
+
 def check_back_python(file_name):
     dir_file = os.path.abspath(os.path.dirname(__file__))
     file_path = os.path.join(dir_file, file_name)
     if not os.path.exists(file_path):
-        raise Exception(f"文件不存在: {file_path}")
-    
+        raise Exception(f"File does not exist: {file_path}")
+
     py_processes = get_python_processes()
     found = False
-    
+
     for pid, script_path in py_processes:
+        del pid
         script_name = os.path.basename(script_path)
         if script_name == file_name:
             found = True
             break
-    
+
     if not found:
         cmd = [sys.executable, file_path]
-        # 直接显示输出到当前终端（不静默）
-        subprocess.Popen(cmd)  # 移除 stdout/stderr 重定向
-        print(f"已启动: {file_name}（输出显示在本终端）")
+        subprocess.Popen(cmd)
+        print(f"Started: {file_name} (output is shown in this terminal)")
     else:
-        print(f"已在运行: {file_name}")
+        print(f"Already running: {file_name}")

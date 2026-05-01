@@ -400,6 +400,9 @@ class TaskManager:
         self.stopJudge.set()
         self.stopHandle.set()
         self.movebase.MOD_STOP()
+        for thread in (getattr(self, "t_judge", None), getattr(self, "t_handle", None)):
+            if thread is not None and thread.is_alive():
+                thread.join(timeout=1.0)
         for client in self.task_clients.values():
             client.close()
         self.shm_manager.release_all()
