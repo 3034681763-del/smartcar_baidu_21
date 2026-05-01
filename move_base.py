@@ -635,6 +635,7 @@ class Task_func:
 
             aligned, motion, debug = self.tracking_aligner.update(
                 target_box.center,
+                bbox=getattr(target_box, "bbox", None),
                 target_pose=target_pose,
                 cam_pose=cam_pose,
             )
@@ -651,6 +652,12 @@ class Task_func:
             y_err = debug["y_err"]
             x_text = "skip" if x_err is None else f"{x_err:.2f}"
             y_text = "skip" if y_err is None else f"{y_err:.2f}"
+            box_w = debug.get("box_width")
+            box_h = debug.get("box_height")
+            box_area = debug.get("box_area")
+            box_w_text = "skip" if box_w is None else f"{box_w:.1f}"
+            box_h_text = "skip" if box_h is None else f"{box_h:.1f}"
+            box_area_text = "skip" if box_area is None else f"{box_area:.0f}"
 
             if aligned:
                 if callable(debug_hook):
@@ -668,7 +675,9 @@ class Task_func:
             print(
                 "[Tracking] "
                 f"center={target_box.center} "
-                f"x_err={x_text} y_err={y_text}"
+                f"x_err={x_text} y_err={y_text} "
+                f"box_w={box_w_text} box_h={box_h_text} "
+                f"box_area={box_area_text} box_ok={debug.get('box_size_ok')}"
             )
             time.sleep(0.02)
 

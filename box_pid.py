@@ -85,6 +85,10 @@ class BoxPidAligner:
         self.x_threshold = float(mode_cfg.get("x_threshold", 15.0))
         self.y_threshold = float(mode_cfg.get("y_threshold", 15.0))
         self.judge_count = int(mode_cfg.get("judge_count", 3))
+        self.max_box_width = float(mode_cfg.get("max_box_width", 0.0))
+        self.max_box_height = float(mode_cfg.get("max_box_height", 0.0))
+        self.max_box_area = float(mode_cfg.get("max_box_area", 0.0))
+        self.box_too_large_backoff = float(mode_cfg.get("box_too_large_backoff", 0.0))
         self.countx = self.judge_count
         self.county = self.judge_count
 
@@ -97,7 +101,21 @@ class BoxPidAligner:
         self.countx = self.judge_count
         self.county = self.judge_count
 
-    def update(self, center, target_pose=(320, 240), cam_pose="L"):
+    def _check_box_size(self, bbox):
+        if bbox is None:
+            return True, None, None, None
+
+        x1, y1, x2, y2 = [float(value) for value in bbox]
+        box_width = max(0.0, x2 - x1)
+        box_height = max(0.0, y2 - y1)
+        box_area = box_width * box_height
+
+        width_ok = self.max_box_width <= 0.0 or box_width <= self.max_box_width
+        height_ok = self.max_box_height <= 0.0 or box_height <= self.max_box_height
+        area_ok = self.max_box_area <= 0.0 or box_area <= self.max_box_area
+        return width_ok and height_ok and area_ok, box_width, box_height, box_area
+
+    def update(self, center, bbox=None, target_pose=(320, 240), cam_pose="L"):
         now = time.time()
         target_x = target_pose[0] if len(target_pose) > 0 else False
         target_y = target_pose[1] if len(target_pose) > 1 else False
@@ -152,6 +170,8 @@ class BoxPidAligner:
 
             aligned = self.countx <= 0 and self.county <= 0
 
+        box_size_ok, box_width, box_height, box_area = self._check_box_size(bbox)
+
         if cam_pose == "R":
             motion = {
                 "cmd": "Motion",
@@ -177,4 +197,23 @@ class BoxPidAligner:
                 "z_angle": 0.0,
             }
 
-        return aligned, motion, {"x_err": x_err, "y_err": y_err}
+        center_aligned = aligned
+        aligned = center_aligned and box_size_ok
+        if center_aligned and not box_size_ok and self.box_too_large_backoff > 0.0:
+            motion = {
+                "cmd": "Motion",
+                "mode": 1,
+                "pos_x": 0.0,
+                "pos_y": -self.box_too_large_backoff,
+                "z_angle": 0.0,
+            }
+
+        return aligned, motion, {
+            "x_err": x_err,
+            "y_err": y_err,
+            "box_width": box_width,
+            "box_height": box_height,
+            "box_area": box_area,
+            "box_size_ok": box_size_ok,
+            "center_aligned": center_aligned,
+        }
