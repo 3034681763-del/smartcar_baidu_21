@@ -29,7 +29,7 @@ class OrderAIClient:
             self.model = (
                 model
                 or os.environ.get("AI_STUDIO_TEXT_MODEL")
-                or os.environ.get("AISTUDIO_TEXT_MODEL", "ernie-x1-turbo-32k")
+                or os.environ.get("AISTUDIO_TEXT_MODEL", "ernie-3.5-8k")
             )
             self.api_url = (
                 api_url
