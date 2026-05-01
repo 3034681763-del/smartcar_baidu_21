@@ -33,7 +33,7 @@ class PestVlmClient:
             self.model = (
                 model
                 or os.environ.get("AI_STUDIO_VLM_MODEL")
-                or os.environ.get("AISTUDIO_VLM_MODEL", "ernie-4.5-vl-28b-a3b")
+                or os.environ.get("AISTUDIO_VLM_MODEL", "ernie-4.5-turbo-vl-32k")
             )
             self.api_url = (
                 api_url
