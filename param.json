@@ -30,9 +30,9 @@
       "x_threshold": 25.0,
       "y_threshold": 25.0,
       "judge_count": 2,
-      "max_box_width": 300.0,
-      "max_box_height": 300.0,
-      "max_box_area": 70000.0,
+      "max_box_width": 160.0,
+      "max_box_height": 160.0,
+      "max_box_area": 25600.0,
       "box_too_large_backoff": 20.0
     },
     "Slow": {
@@ -65,9 +65,9 @@
       "x_threshold": 25.0,
       "y_threshold": 25.0,
       "judge_count": 2,
-      "max_box_width": 300.0,
-      "max_box_height": 300.0,
-      "max_box_area": 70000.0,
+      "max_box_width": 160.0,
+      "max_box_height": 160.0,
+      "max_box_area": 25600.0,
       "box_too_large_backoff": 20.0
     }
   }
