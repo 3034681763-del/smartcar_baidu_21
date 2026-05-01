@@ -660,7 +660,7 @@ class Task_func:
                         debug=debug,
                         missed_frames=missed_frames,
                     )
-                self.base.MOD_ALIGN_DONE()
+                self.base.MOD_STOP()
                 self.tracking_aligner.reset()
                 print("[Tracking] Location OK")
                 return True

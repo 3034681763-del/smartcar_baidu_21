@@ -27,9 +27,9 @@
         "int_max": 8.0,
         "output_max": 18.0
       },
-      "x_threshold": 15.0,
-      "y_threshold": 15.0,
-      "judge_count": 3
+      "x_threshold": 25.0,
+      "y_threshold": 25.0,
+      "judge_count": 2
     },
     "Slow": {
       "x_pid": {
@@ -58,9 +58,9 @@
         "int_max": 7.0,
         "output_max": 8.0
       },
-      "x_threshold": 15.0,
-      "y_threshold": 15.0,
-      "judge_count": 3
+      "x_threshold": 25.0,
+      "y_threshold": 25.0,
+      "judge_count": 2
     }
   }
 }
