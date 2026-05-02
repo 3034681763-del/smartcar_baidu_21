@@ -12,7 +12,7 @@ from infer_server_client import model_configs, serve_model_process
 from model_path_config import get_lane_model_path, get_model_profile
 from shared_memory_manager import SharedMemoryManager
 
-SERIAL_PHYSICAL_PATH = "2.4:1.0"
+SERIAL_PHYSICAL_PATH = "2.2:1.0"
 LANE_CAMERA_DEVICE = "1-2.3:1.0"
 TASK_CAMERA_DEVICE = "1-2.1:1.0"
 LANE_MODEL_PATH = get_lane_model_path()

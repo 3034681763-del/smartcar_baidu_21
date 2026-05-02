@@ -12,7 +12,7 @@ def build_parser():
     )
     parser.add_argument(
         "--physical-path",
-        default="2.4:1.0",
+        default="2.2:1.0",
         help="Serial physical path, for example 2.2:1.0 or /dev/ttyUSB0",
     )
     parser.add_argument("--baudrate", type=int, default=115200, help="Serial baudrate")
